@@ -1,3 +1,4 @@
+<!-- GENERATED from site/index.html by site/build_pages.py — do not edit -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +7,7 @@
 <title>agent-forge</title>
 <meta name="description" content="Controlled, serial LLM code generation with test gates, review loops, and hard budget caps.">
 <style>
-  /* === Design Tokens (synthesized from musepool refs) === */
+  /* === Design Tokens === */
   :root {
     --bg: #0a0a0a;
     --bg-raised: #111111;
@@ -40,7 +41,7 @@
     overflow-x: hidden;
   }
 
-  /* Film grain texture overlay (from qtAq3fyt) */
+  /* Film grain texture overlay */
   body::after {
     content: "";
     position: fixed; inset: 0; pointer-events: none; z-index: 9999;
@@ -53,7 +54,7 @@
   a { color: var(--text); text-decoration: none; border-bottom: var(--line-weight) solid transparent; transition: border-color .2s; }
   a:hover { border-bottom-color: var(--accent); }
 
-  /* === Navigation (floating pill from lSZo3qgS + glass morphism from DRkP7PQd) === */
+  /* === Navigation: floating pill + glass === */
   nav {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100;
     background: rgba(10,10,10,0.7);
@@ -90,7 +91,7 @@
   }
   section { padding: 120px 0; position: relative; }
 
-  /* Section label (from lSZo3qgS): small uppercase tag + horizontal rule */
+  /* Section label: small uppercase tag + horizontal rule */
   .section-label {
     display: flex; align-items: center; gap: 16px;
     margin-bottom: 48px;
@@ -105,7 +106,7 @@
     background: var(--border);
   }
 
-  /* === Hero: flush-left, NOT centered (from lSZo3qgS) === */
+  /* === Hero: flush-left === */
   .hero {
     min-height: 100vh; display: flex; align-items: center;
     padding-top: 100px;
@@ -152,7 +153,7 @@
   }
   .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* === Torn edge dividers (from qtAq3fyt) === */
+  /* === Torn edge dividers === */
   .torn-edge {
     position: absolute; left: 0; width: 100%; height: 40px;
     overflow: hidden; pointer-events: none;
@@ -390,9 +391,9 @@
 <!-- Live Demo -->
 <section id="demo">
   <div class="container">
-    <div class="section-label"><span data-i18n="demo_label">Live Demo</span></div>
+    <div class="section-label"><span data-i18n="demo_label">Pipeline Demo · Simulated</span></div>
     <p class="lead" style="max-width:600px; margin:0 0 40px;" data-i18n="demo_subtitle">
-      Click <strong>Next Step</strong> to walk a task through the entire pipeline.
+      A scripted walkthrough — no live API calls. Click <strong>Next Step</strong> to walk a task through the pipeline; real runs log the same events to <code>runs/&lt;id&gt;/events.jsonl</code>.
     </p>
 
     <div class="demo-board" id="demoBoard">
@@ -431,7 +432,7 @@
     <div class="demo-step-info" id="demoInfo" data-i18n="demo_info">Press <strong>Next Step</strong> to start the pipeline.</div>
 
     <div class="demo-log" id="demoLog">
-      <div class="entry">[system] agent-forge demo ready.</div>
+      <div class="entry">[system] simulated run — no API calls are made.</div>
     </div>
   </div>
 </section>
@@ -600,7 +601,7 @@ forge resume</code></pre>
       </div>
       <div class="card">
         <h3 data-i18n="why_2_title">Scope Control</h3>
-        <p data-i18n="why_2_p">Agents can only write where you allow. Attempts to touch <code>canon/</code> or install dependencies are blocked <em>in code</em>.</p>
+        <p data-i18n="why_2_p">File writes are locked to the paths you allow; <code>canon/</code> writes and dependency installs are blocked <em>in code</em>. Command execution uses a tests/linters allowlist — a guardrail, not a sandbox (<a href="https://github.com/Xarawg/agent-forge/blob/master/SECURITY.md">trust model</a>).</p>
       </div>
       <div class="card">
         <h3 data-i18n="why_3_title">Second Model Review</h3>
@@ -632,20 +633,21 @@ forge resume</code></pre>
       </div>
       <div>
         <h4 data-i18n="footer_docs">Docs</h4>
-        <a href="SPEC.md">Specification</a>
-        <a href="CONFIGURATION.md">Configuration</a>
-        <a href="ARCHITECTURE.md">Architecture</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/SPEC.md">Specification</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/CONFIGURATION.md">Configuration</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/ARCHITECTURE.md">Architecture</a>
       </div>
       <div>
         <h4 data-i18n="footer_project">Project</h4>
         <a href="https://github.com/Xarawg/agent-forge#readme">README</a>
         <a href="https://github.com/Xarawg/agent-forge">GitHub</a>
-        <a href="https://github.com/Xarawg/agent-forge/blob/main/LICENSE">License</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/LICENSE">License</a>
       </div>
       <div>
         <h4 data-i18n="footer_meta">Meta</h4>
-        <a href="DECISIONS.md">Decisions</a>
-        <a href="ANALYTICS.md">Analytics</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/DECISIONS.md">Decisions</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/ANALYTICS.md">Analytics</a>
+        <a href="https://github.com/Xarawg/agent-forge/blob/master/SECURITY.md">Security</a>
       </div>
     </div>
     <div class="copy">MIT © 2026 agent-forge contributors</div>
@@ -664,7 +666,7 @@ const I18N = {
     p3_title: "Validate", p3_desc: "Tests & linters",
     p4_title: "Review", p4_desc: "Second model checks",
     p5_title: "Repair", p5_desc: "Fix or fail visibly",
-    demo_label: "Live Demo", demo_subtitle: "Click <strong>Next Step</strong> to walk a task through the entire pipeline.",
+    demo_label: "Pipeline Demo · Simulated", demo_subtitle: "A scripted walkthrough — no live API calls. Click <strong>Next Step</strong> to walk a task through the pipeline; real runs log the same events to <code>runs/&lt;id&gt;/events.jsonl</code>.",
     tab_happy: "✅ Happy Path", tab_repair: "🔧 Repair Loop",
     btn_next: "▶ Next Step", btn_auto: "⏵ Auto Play", btn_reset: "↺ Reset",
     demo_info: "Press <strong>Next Step</strong> to start the pipeline.",
@@ -697,7 +699,7 @@ const I18N = {
     start_label: "Quick Start",
     why_label: "Why agent-forge?",
     why_1_title: "Budget Caps", why_1_p: "Per-task, per-run, and per-day USD limits. Exceed a cap and the task becomes blocked with a reason — no runaway bills.",
-    why_2_title: "Scope Control", why_2_p: "Agents can only write where you allow. Attempts to touch canon/ or install dependencies are blocked in code.",
+    why_2_title: "Scope Control", why_2_p: "File writes are locked to the paths you allow; canon/ writes and dependency installs are blocked in code. Command execution uses a tests/linters allowlist — a guardrail, not a sandbox (see SECURITY.md).",
     why_3_title: "Second Model Review", why_3_p: "A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop.",
     why_4_title: "Full Audit Trail", why_4_p: "Every token, every command, every cost is written to runs/<id>/events.jsonl.",
     why_5_title: "Mock Mode", why_5_p: "Test the entire pipeline without an API key. Perfect for CI and local development.",
@@ -713,7 +715,7 @@ const I18N = {
     p3_title: "Валидация", p3_desc: "Тесты и линтеры",
     p4_title: "Ревью", p4_desc: "Вторая модель проверяет",
     p5_title: "Починка", p5_desc: "Чинит или падает явно",
-    demo_label: "Живое демо", demo_subtitle: "Нажми <strong>Следующий шаг</strong>, чтобы пройти весь pipeline.",
+    demo_label: "Демо пайплайна · Симуляция", demo_subtitle: "Сценарная проходка без живых API-вызовов. Нажми <strong>Следующий шаг</strong>, чтобы пройти задачу через pipeline; реальные прогоны пишут те же события в <code>runs/&lt;id&gt;/events.jsonl</code>.",
     tab_happy: "✅ Успешный путь", tab_repair: "🔧 Цикл починки",
     btn_next: "▶ Следующий шаг", btn_auto: "⏵ Автовоспроизведение", btn_reset: "↺ Сброс",
     demo_info: "Нажми <strong>Следующий шаг</strong>, чтобы запустить pipeline.",
@@ -746,7 +748,7 @@ const I18N = {
     start_label: "Быстрый старт",
     why_label: "Почему agent-forge?",
     why_1_title: "Бюджетные капы", why_1_p: "Лимиты per-task, per-run и per-day в USD. Превышение → задача blocked с причиной — нет runaway-списаний.",
-    why_2_title: "Контроль scope", why_2_p: "Агент пишет только туда, куда разрешено. Попытки залезть в canon/ или ставить зависимости блокируются в коде.",
+    why_2_title: "Контроль scope", why_2_p: "Запись файлов ограничена разрешёнными путями; запись в canon/ и установка зависимостей блокируются в коде. Запуск команд — через allowlist тестов/линтеров: это ограничение, а не песочница (см. SECURITY.md).",
     why_3_title: "Второе мнение", why_3_p: "Дешевая reviewer-модель проверяет каждый результат по чек-листу. Провалы уходят в bounded repair-цикл.",
     why_4_title: "Полный аудит", why_4_p: "Каждый токен, каждая команда, каждый доллар — в runs/<id>/events.jsonl.",
     why_5_title: "Mock-режим", why_5_p: "Тестируй весь pipeline без API-ключа. Идеально для CI и разработки самого agent-forge.",
@@ -771,7 +773,7 @@ document.getElementById('langSwitch').addEventListener('click', () => {
   setLang(currentLang === 'en' ? 'ru' : 'en');
 });
 
-/* ===== Hero character stagger (from DRkP7PQd) ===== */
+/* ===== Hero character stagger ===== */
 (function staggerHero() {
   const h1 = document.getElementById('heroTitle');
   if (!h1) return;

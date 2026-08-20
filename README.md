@@ -70,6 +70,10 @@ mypy --strict forge/
 
 CI: GitHub Actions (`.github/workflows/ci.yml`, ubuntu × windows, Python 3.12/3.13) and GitLab CI (`.gitlab-ci.yml`).
 
+## Security
+
+Scope control and the command allowlist are guardrails against model mistakes, **not a sandbox** — allowlisted commands (`python`, `npm`, …) can execute arbitrary code, and `acceptance` commands are trusted owner shell. Exact boundaries and recommendations: [SECURITY.md](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE) © 2026 agent-forge contributors.
