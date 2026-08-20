@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-forge</title>
+<meta name="description" content="Controlled, serial LLM code generation with test gates, review loops, and hard budget caps.">
+<style>
+  /* === Design Tokens (synthesized from musepool refs) === */
+  :root {
+    --bg: #0a0a0a;
+    --bg-raised: #111111;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #f0f0f0;
+    --text-dim: #888888;
+    --accent: #d40027;
+    --accent-hover: #ff1a3c;
+    --success: #2ea043;
+    --warning: #d29922;
+    --danger: #f85149;
+    --font-display: "Inter", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "SFMono-Regular", "IBM Plex Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    --radius-sharp: 3px;
+    --radius-pill: 999px;
+    --line-weight: 2px;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.65 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Film grain texture overlay (from qtAq3fyt) */
+  body::after {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+  }
+
+  a { color: var(--text); text-decoration: none; border-bottom: var(--line-weight) solid transparent; transition: border-color .2s; }
+  a:hover { border-bottom-color: var(--accent); }
+
+  /* === Navigation (floating pill from lSZo3qgS + glass morphism from DRkP7PQd) === */
+  nav {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100;
+    background: rgba(10,10,10,0.7);
+    backdrop-filter: blur(50px) saturate(1.2);
+    -webkit-backdrop-filter: blur(50px) saturate(1.2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 10px 24px;
+    display: flex; align-items: center; gap: 28px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.4);
+  }
+  nav .logo {
+    font-weight: 800; font-size: 15px; letter-spacing: -0.02em;
+    font-family: var(--font-display);
+  }
+  nav .logo span { color: var(--accent); }
+  nav .links { display: flex; gap: 20px; font-size: 13px; }
+  nav .links a {
+    color: var(--text-dim); border: none; font-weight: 500;
+    transition: color .2s;
+  }
+  nav .links a:hover { color: var(--text); }
+  nav .lang-switch {
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    color: var(--text-dim); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: var(--radius-pill);
+    background: transparent; transition: all .2s;
+  }
+  nav .lang-switch:hover { color: var(--text); border-color: var(--text-dim); }
+
+  /* === Layout primitives === */
+  .container {
+    max-width: 1100px; margin: 0 auto; padding: 0 32px;
+  }
+  section { padding: 120px 0; position: relative; }
+
+  /* Section label (from lSZo3qgS): small uppercase tag + horizontal rule */
+  .section-label {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 48px;
+  }
+  .section-label span {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .section-label::after {
+    content: ""; flex: 1; height: var(--line-weight);
+    background: var(--border);
+  }
+
+  /* === Hero: flush-left, NOT centered (from lSZo3qgS) === */
+  .hero {
+    min-height: 100vh; display: flex; align-items: center;
+    padding-top: 100px;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(48px, 7vw, 96px);
+    font-weight: 800; line-height: 1.05;
+    letter-spacing: -0.03em; margin-bottom: 24px;
+  }
+  .hero h1 .char {
+    display: inline-block;
+    opacity: 0; transform: translateY(40px);
+    animation: charReveal 0.6s cubic-bezier(0.24, 0.12, 0.09, 1) forwards;
+  }
+  @keyframes charReveal {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero p.lead {
+    font-size: 20px; color: var(--text-dim); max-width: 520px;
+    line-height: 1.55; margin-bottom: 40px;
+  }
+  .hero .cta-row { display: flex; gap: 16px; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 32px; font-size: 14px; font-weight: 600;
+    border-radius: var(--radius-sharp); cursor: pointer; border: none;
+    transition: all .2s cubic-bezier(0.24, 0.12, 0.09, 1);
+    letter-spacing: 0.01em;
+  }
+  .btn-primary {
+    background: var(--accent); color: #fff;
+    box-shadow: 0 4px 24px rgba(212,0,39,0.25);
+  }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 6px 32px rgba(212,0,39,0.4);
+    transform: translateY(-1px);
+  }
+  .btn-ghost {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* === Torn edge dividers (from qtAq3fyt) === */
+  .torn-edge {
+    position: absolute; left: 0; width: 100%; height: 40px;
+    overflow: hidden; pointer-events: none;
+  }
+  .torn-edge svg { width: 100%; height: 100%; display: block; }
+
+  /* === Pipeline strip === */
+  .pipeline-strip {
+    display: flex; gap: 0; border: 1px solid var(--border);
+    border-radius: var(--radius-sharp); overflow: hidden;
+    margin-top: 64px;
+  }
+  .pipe-item {
+    flex: 1; padding: 20px 16px; text-align: center;
+    border-right: 1px solid var(--border);
+    background: var(--bg-raised);
+    transition: background .3s;
+  }
+  .pipe-item:last-child { border-right: none; }
+  .pipe-item:hover { background: var(--surface); }
+  .pipe-item .num {
+    font-family: var(--font-mono); font-size: 11px; color: var(--accent);
+    margin-bottom: 6px; font-weight: 600;
+  }
+  .pipe-item h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .pipe-item p { font-size: 12px; color: var(--text-dim); margin: 0; }
+
+  /* === Demo Kanban === */
+  .demo-board {
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+  }
+  .demo-col {
+    min-width: 160px; flex: 1; background: var(--bg-raised);
+    border: 1px solid var(--border); border-radius: var(--radius-sharp);
+    min-height: 180px;
+  }
+  .demo-col h4 {
+    margin: 0; padding: 10px 12px; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border); color: var(--text-dim);
+    font-weight: 600;
+  }
+  .demo-card {
+    margin: 10px; padding: 14px; background: var(--surface);
+    border-left: var(--line-weight) solid var(--accent);
+    font-size: 13px;
+  }
+  .demo-card .title { font-weight: 700; margin-bottom: 6px; font-size: 14px; }
+  .demo-card .meta { color: var(--text-dim); font-size: 11px; font-family: var(--font-mono); }
+  .demo-card.done { border-left-color: var(--success); }
+  .demo-card.failed { border-left-color: var(--danger); }
+  .demo-card.repair { border-left-color: var(--warning); }
+  .demo-controls { display: flex; gap: 10px; justify-content: center; margin: 24px 0 12px; flex-wrap: wrap; }
+  .demo-step-info { text-align: center; color: var(--text-dim); font-size: 14px; min-height: 22px; }
+  .demo-log {
+    background: #050505; border: 1px solid var(--border);
+    border-radius: var(--radius-sharp); padding: 16px 20px;
+    font: 12px/1.7 var(--font-mono); max-height: 200px; overflow-y: auto;
+    margin-top: 20px;
+  }
+  .demo-log .entry { margin: 2px 0; animation: fadeIn .25s; }
+  @keyframes fadeIn { from {opacity:0} to {opacity:1} }
+
+  /* Scenario tabs */
+  .scenario-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+  .scenario-tab {
+    padding: 8px 20px; border-radius: var(--radius-sharp); font-size: 13px;
+    font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+    background: var(--bg-raised); color: var(--text-dim); transition: all .2s;
+  }
+  .scenario-tab:hover { border-color: var(--text-dim); color: var(--text); }
+  .scenario-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* === Feature rows === */
+  .feature-row { display: flex; gap: 56px; margin-bottom: 80px; align-items: flex-start; }
+  .feature-row.reverse { flex-direction: row-reverse; }
+  .feature-row .text { flex: 1; }
+  .feature-row .visual { flex: 1; }
+  .feature-row h3 {
+    font-family: var(--font-display); font-size: 28px;
+    font-weight: 700; margin-bottom: 16px; letter-spacing: -0.02em;
+  }
+  .feature-row p { color: var(--text-dim); margin-bottom: 16px; }
+  .feature-row ul { list-style: none; }
+  .feature-row li {
+    padding: 5px 0 5px 24px; position: relative; color: var(--text-dim); font-size: 15px;
+  }
+  .feature-row li::before {
+    content: "—"; position: absolute; left: 0; color: var(--accent); font-weight: 700;
+  }
+
+  /* Code block */
+  .code-block {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-sharp); overflow: hidden;
+  }
+  .code-block .head {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .code-block .head .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .code-block pre {
+    padding: 16px 20px; overflow-x: auto; font: 13px/1.7 var(--font-mono); margin: 0;
+  }
+  .code-block code { color: var(--text); }
+  .kw { color: #ff7b72; }
+  .str { color: #a5d6ff; }
+  .cm { color: #6e7681; }
+  .num { color: #79c0ff; }
+
+  /* Terminal */
+  .terminal {
+    background: #050505; border: 1px solid var(--border);
+    border-radius: var(--radius-sharp); padding: 20px;
+    font: 13px/1.7 var(--font-mono);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .terminal .line { margin: 2px 0; }
+  .terminal .p { color: var(--success); }
+  .terminal .c { color: var(--text); }
+  .terminal .o { color: var(--text-dim); }
+  .terminal .ok { color: var(--success); }
+  .terminal .er { color: var(--danger); }
+
+  /* Cards */
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; }
+  .grid-3 .card {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    padding: 36px 32px; transition: background .3s, border-color .3s;
+  }
+  .grid-3 .card:hover { background: var(--surface); border-color: #333; }
+  .card h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+  .card p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+
+  /* Use case cards */
+  .use-case {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-sharp); padding: 32px;
+    margin-bottom: 16px;
+  }
+  .use-case h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .use-case p { color: var(--text-dim); font-size: 15px; }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border); padding: 48px 0 64px;
+  }
+  footer .footer-grid {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px;
+  }
+  footer h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 16px; }
+  footer a { display: block; color: var(--text-dim); font-size: 14px; margin-bottom: 8px; border: none; }
+  footer a:hover { color: var(--text); }
+  footer .copy { margin-top: 48px; font-size: 13px; color: var(--text-dim); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    nav { padding: 8px 16px; gap: 12px; }
+    nav .links { display: none; }
+    .hero h1 { font-size: 40px; }
+    .hero p.lead { font-size: 16px; }
+    section { padding: 80px 0; }
+    .feature-row, .feature-row.reverse { flex-direction: column; }
+    .pipeline-strip { flex-direction: column; }
+    .pipe-item { border-right: none; border-bottom: 1px solid var(--border); }
+    .demo-board { flex-direction: column; }
+    footer .footer-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">agent<span>-</span>forge</div>
+  <div class="links">
+    <a href="#demo" data-i18n="nav_demo">Demo</a>
+    <a href="#how" data-i18n="nav_how">How it works</a>
+    <a href="#usecases" data-i18n="nav_use">Use cases</a>
+    <a href="#start" data-i18n="nav_start">Quick start</a>
+  </div>
+  <button class="lang-switch" id="langSwitch">RU</button>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <h1 id="heroTitle">Controlled LLM<br>Code Generation</h1>
+    <p class="lead" data-i18n="hero_lead">
+      Run dozens of spec-driven coding tasks through LLM agents with real test gates,
+      second-model review, hard budget caps, and a full on-disk audit trail.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#start" data-i18n="btn_start">Get Started</a>
+      <a class="btn btn-ghost" href="#how" data-i18n="btn_learn">How it Works</a>
+    </div>
+
+    <div class="pipeline-strip" style="margin-top: 80px;">
+      <div class="pipe-item">
+        <div class="num">01</div>
+        <h4 data-i18n="p1_title">Task Queue</h4>
+        <p data-i18n="p1_desc">DAG with scopes &amp; budgets</p>
+      </div>
+      <div class="pipe-item">
+        <div class="num">02</div>
+        <h4 data-i18n="p2_title">Coder Agent</h4>
+        <p data-i18n="p2_desc">Writes code with tools</p>
+      </div>
+      <div class="pipe-item">
+        <div class="num">03</div>
+        <h4 data-i18n="p3_title">Validate</h4>
+        <p data-i18n="p3_desc">Tests &amp; linters</p>
+      </div>
+      <div class="pipe-item">
+        <div class="num">04</div>
+        <h4 data-i18n="p4_title">Review</h4>
+        <p data-i18n="p4_desc">Second model checks</p>
+      </div>
+      <div class="pipe-item">
+        <div class="num">05</div>
+        <h4 data-i18n="p5_title">Repair</h4>
+        <p data-i18n="p5_desc">Fix or fail visibly</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Torn edge divider -->
+<div class="torn-edge" style="position:relative; margin-top:-40px;">
+  <svg viewBox="0 0 1200 40" preserveAspectRatio="none">
+    <path d="M0,40 L0,20 Q30,25 60,18 T120,22 T180,15 T240,24 T300,17 T360,21 T420,16 T480,23 T540,19 T600,22 T660,14 T720,20 T780,18 T840,23 T900,15 T960,21 T1020,17 T1080,24 T1140,18 T1200,20 L1200,40 Z" fill="#0a0a0a"/>
+  </svg>
+</div>
+
+<!-- Live Demo -->
+<section id="demo">
+  <div class="container">
+    <div class="section-label"><span data-i18n="demo_label">Live Demo</span></div>
+    <p class="lead" style="max-width:600px; margin:0 0 40px;" data-i18n="demo_subtitle">
+      Click <strong>Next Step</strong> to walk a task through the entire pipeline.
+    </p>
+
+    <div class="demo-board" id="demoBoard">
+      <div class="demo-col" data-state="queued">
+        <h4>⏳ Queued</h4>
+        <div class="dropzone" id="col-queued"></div>
+      </div>
+      <div class="demo-col" data-state="running">
+        <h4>🔨 Running</h4>
+        <div class="dropzone" id="col-running"></div>
+      </div>
+      <div class="demo-col" data-state="validating">
+        <h4>✅ Validate</h4>
+        <div class="dropzone" id="col-validating"></div>
+      </div>
+      <div class="demo-col" data-state="review">
+        <h4>👁️ Review</h4>
+        <div class="dropzone" id="col-review"></div>
+      </div>
+      <div class="demo-col" data-state="done">
+        <h4>🎉 Done</h4>
+        <div class="dropzone" id="col-done"></div>
+      </div>
+    </div>
+
+    <div class="scenario-tabs">
+      <div class="scenario-tab active" data-scenario="happy" data-i18n="tab_happy">✅ Happy Path</div>
+      <div class="scenario-tab" data-scenario="repair" data-i18n="tab_repair">🔧 Repair Loop</div>
+    </div>
+
+    <div class="demo-controls">
+      <button class="btn btn-primary" id="demoNext" data-i18n="btn_next">▶ Next Step</button>
+      <button class="btn btn-ghost" id="demoAuto" data-i18n="btn_auto">⏵ Auto Play</button>
+      <button class="btn btn-ghost" id="demoReset" data-i18n="btn_reset">↺ Reset</button>
+    </div>
+    <div class="demo-step-info" id="demoInfo" data-i18n="demo_info">Press <strong>Next Step</strong> to start the pipeline.</div>
+
+    <div class="demo-log" id="demoLog">
+      <div class="entry">[system] agent-forge demo ready.</div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how">
+  <div class="container">
+    <div class="section-label"><span data-i18n="how_label">How It Works</span></div>
+
+    <div class="feature-row">
+      <div class="text">
+        <h3 data-i18n="how_1_title">1. Define Your Tasks</h3>
+        <p data-i18n="how_1_p">
+          Write a <code>tasks.yaml</code> queue: each task has a scope, acceptance commands,
+          budget caps, and dependencies. The planner can draft it from your SPEC.md.
+        </p>
+        <ul>
+          <li data-i18n="how_1_l1">Gitignore-like scope paths</li>
+          <li data-i18n="how_1_l2">Shell acceptance commands</li>
+          <li data-i18n="how_1_l3">Per-task token &amp; USD budgets</li>
+          <li data-i18n="how_1_l4">DAG dependencies with topo-order</li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="code-block">
+          <div class="head"><span class="dot" style="background:#ff5f56"></span><span class="dot" style="background:#ffbd2e"></span><span class="dot" style="background:#27c93f"></span>tasks.yaml</div>
+          <pre><code><span class="kw">tasks</span>:
+  - <span class="kw">id</span>: <span class="str">port-validator</span>
+    <span class="kw">scope_paths</span>: [<span class="str">"tools-ts/**"</span>]
+    <span class="kw">acceptance</span>:
+      - <span class="str">"cd tools-ts && npm test"</span>
+    <span class="kw">budget</span>:
+      <span class="kw">max_cost_usd</span>: <span class="num">0.50</span></code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-row reverse">
+      <div class="text">
+        <h3 data-i18n="how_2_title">2. Agent Loop with Guardrails</h3>
+        <p data-i18n="how_2_p">
+          The coder agent gets <code>read_file</code>, <code>write_file</code>,
+          <code>list_dir</code>, and <code>run_command</code> — nothing else.
+        </p>
+        <ul>
+          <li data-i18n="how_2_l1">Writes locked to task scope paths</li>
+          <li data-i18n="how_2_l2"><code>canon/</code> always read-only</li>
+          <li data-i18n="how_2_l3"><code>npm install</code> blocked at tool level</li>
+          <li data-i18n="how_2_l4">Violations logged as events</li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="terminal">
+          <div class="line"><span class="p">$</span> <span class="c">forge run --tasks tasks.yaml --target ./my-repo</span></div>
+          <div class="line o">[run] started 2026-08-20T10:00:00Z</div>
+          <div class="line o">[coder] port-validator → DONE (12 steps)</div>
+          <div class="line o">[validate] npm test → exit=0</div>
+          <div class="line o">[review] APPROVE</div>
+          <div class="line o">[git] committed to forge/port-validator</div>
+          <div class="line ok">[done] port-validator — $0.17</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-row">
+      <div class="text">
+        <h3 data-i18n="how_3_title">3. Human Gate Before Merge</h3>
+        <p data-i18n="how_3_p">
+          Nothing merges automatically. When a task reaches <code>done</code>,
+          the run pauses until you explicitly accept it.
+        </p>
+        <ul>
+          <li data-i18n="how_3_l1"><code>forge accept &lt;task-id&gt;</code> merges branch</li>
+          <li data-i18n="how_3_l2"><code>forge resume</code> continues queue</li>
+          <li data-i18n="how_3_l3">Runs resumable from disk snapshots</li>
+          <li data-i18n="how_3_l4">Full journal in <code>runs/&lt;id&gt;/events.jsonl</code></li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="code-block">
+          <div class="head"><span class="dot" style="background:#ff5f56"></span><span class="dot" style="background:#ffbd2e"></span><span class="dot" style="background:#27c93f"></span>bash</div>
+          <pre><code><span class="cm"># Gate #3 — human approval</span>
+$ <span class="kw">forge</span> accept port-validator
+Merged forge/port-validator into main.
+
+$ <span class="kw">forge</span> resume run-20260820-080204
+<span class="kw">Continuing</span> 3 remaining tasks...</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Use cases -->
+<section id="usecases" style="background:#0d0d0d;">
+  <div class="container">
+    <div class="section-label"><span data-i18n="use_label">Use Cases</span></div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h3 data-i18n="uc_1_title">Language Ports</h3>
+        <p data-i18n="uc_1_p">Port a Python validator to TypeScript, a Bash script to Go, or a legacy module to a new framework — with acceptance tests ensuring parity.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="uc_2_title">Spec-Driven Modules</h3>
+        <p data-i18n="uc_2_p">Turn a SPEC.md into a working feature: the planner drafts tasks, the coder implements, and tests prove correctness.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="uc_3_title">Refactoring at Scale</h3>
+        <p data-i18n="uc_3_p">Update 20 files to a new API, rename symbols across packages, or migrate test suites — one task per module.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="uc_4_title">Test Generation</h3>
+        <p data-i18n="uc_4_p">Generate missing unit tests for legacy code. Acceptance commands run new tests against old code.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="uc_5_title">Documentation Sync</h3>
+        <p data-i18n="uc_5_p">Keep READMEs, API docs, and decision records in sync with code changes.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="uc_6_title">Multi-Repo Updates</h3>
+        <p data-i18n="uc_6_p">Run the same task queue against multiple repositories. Each gets its own branch, journal, and cost tracking.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick start -->
+<section id="start">
+  <div class="container">
+    <div class="section-label"><span data-i18n="start_label">Quick Start</span></div>
+
+    <div class="code-block">
+      <div class="head"><span class="dot" style="background:#ff5f56"></span><span class="dot" style="background:#ffbd2e"></span><span class="dot" style="background:#27c93f"></span>bash</div>
+      <pre><code><span class="cm"># 1. Install</span>
+pip install -e .
+
+<span class="cm"># 2. Try mock mode (no API key)</span>
+FORGE_MOCK=1 forge run \
+  --tasks config/tasks.example.yaml \
+  --target /path/to/any/dir
+
+forge status
+forge report
+
+<span class="cm"># 3. Real run</span>
+cp .env.example .env
+<span class="cm"># edit .env: DEEPSEEK_API_KEY=sk-...</span>
+
+forge run --tasks tasks.yaml --target ./my-repo --spec SPEC.md
+forge accept my-task-1
+forge resume</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- Why -->
+<section id="why" style="background:#0d0d0d;">
+  <div class="container">
+    <div class="section-label"><span data-i18n="why_label">Why agent-forge?</span></div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h3 data-i18n="why_1_title">Budget Caps</h3>
+        <p data-i18n="why_1_p">Per-task, per-run, and per-day USD limits. Exceed a cap and the task becomes <code>blocked</code> with a reason — no runaway bills.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_2_title">Scope Control</h3>
+        <p data-i18n="why_2_p">Agents can only write where you allow. Attempts to touch <code>canon/</code> or install dependencies are blocked <em>in code</em>.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_3_title">Second Model Review</h3>
+        <p data-i18n="why_3_p">A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_4_title">Full Audit Trail</h3>
+        <p data-i18n="why_4_p">Every token, every command, every cost is written to <code>runs/&lt;id&gt;/events.jsonl</code>.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_5_title">Mock Mode</h3>
+        <p data-i18n="why_5_p">Test the entire pipeline without an API key. Perfect for CI and local development.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_6_title">Any Provider</h3>
+        <p data-i18n="why_6_p">DeepSeek, OpenRouter free tiers, local Ollama, or your own endpoint. Presets are YAML — no code changes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="logo" style="font-size:18px; margin-bottom:12px;">agent<span style="color:var(--accent)">-</span>forge</div>
+        <p style="color:var(--text-dim); font-size:14px;" data-i18n="footer_tag">Controlled LLM code generation.</p>
+      </div>
+      <div>
+        <h4 data-i18n="footer_docs">Docs</h4>
+        <a href="docs/SPEC.md">Specification</a>
+        <a href="docs/CONFIGURATION.md">Configuration</a>
+        <a href="docs/ARCHITECTURE.md">Architecture</a>
+      </div>
+      <div>
+        <h4 data-i18n="footer_project">Project</h4>
+        <a href="README.md">README</a>
+        <a href="https://github.com">GitHub</a>
+        <a href="LICENSE">License</a>
+      </div>
+      <div>
+        <h4 data-i18n="footer_meta">Meta</h4>
+        <a href="docs/DECISIONS.md">Decisions</a>
+        <a href="docs/ANALYTICS.md">Analytics</a>
+      </div>
+    </div>
+    <div class="copy">MIT © 2026 agent-forge contributors</div>
+  </div>
+</footer>
+
+<script>
+/* ===== i18n ===== */
+const I18N = {
+  en: {
+    nav_demo: "Demo", nav_how: "How it works", nav_use: "Use cases", nav_start: "Quick start",
+    hero_lead: "Run dozens of spec-driven coding tasks through LLM agents with real test gates, second-model review, hard budget caps, and a full on-disk audit trail.",
+    btn_start: "Get Started", btn_learn: "How it Works",
+    p1_title: "Task Queue", p1_desc: "DAG with scopes & budgets",
+    p2_title: "Coder Agent", p2_desc: "Writes code with tools",
+    p3_title: "Validate", p3_desc: "Tests & linters",
+    p4_title: "Review", p4_desc: "Second model checks",
+    p5_title: "Repair", p5_desc: "Fix or fail visibly",
+    demo_label: "Live Demo", demo_subtitle: "Click <strong>Next Step</strong> to walk a task through the entire pipeline.",
+    tab_happy: "✅ Happy Path", tab_repair: "🔧 Repair Loop",
+    btn_next: "▶ Next Step", btn_auto: "⏵ Auto Play", btn_reset: "↺ Reset",
+    demo_info: "Press <strong>Next Step</strong> to start the pipeline.",
+    how_label: "How It Works",
+    how_1_title: "1. Define Your Tasks",
+    how_1_p: "Write a tasks.yaml queue: each task has a scope, acceptance commands, budget caps, and dependencies. The planner can draft it from your SPEC.md.",
+    how_1_l1: "Gitignore-like scope paths",
+    how_1_l2: "Shell acceptance commands",
+    how_1_l3: "Per-task token & USD budgets",
+    how_1_l4: "DAG dependencies with topo-order",
+    how_2_title: "2. Agent Loop with Guardrails",
+    how_2_p: "The coder agent gets read_file, write_file, list_dir, and run_command — nothing else.",
+    how_2_l1: "Writes locked to task scope paths",
+    how_2_l2: "canon/ always read-only",
+    how_2_l3: "npm install blocked at tool level",
+    how_2_l4: "Violations logged as events",
+    how_3_title: "3. Human Gate Before Merge",
+    how_3_p: "Nothing merges automatically. When a task reaches done, the run pauses until you explicitly accept it.",
+    how_3_l1: "forge accept <task-id> merges branch",
+    how_3_l2: "forge resume continues queue",
+    how_3_l3: "Runs resumable from disk snapshots",
+    how_3_l4: "Full journal in runs/<id>/events.jsonl",
+    use_label: "Use Cases",
+    uc_1_title: "Language Ports", uc_1_p: "Port a Python validator to TypeScript, a Bash script to Go, or a legacy module to a new framework — with acceptance tests ensuring parity.",
+    uc_2_title: "Spec-Driven Modules", uc_2_p: "Turn a SPEC.md into a working feature: the planner drafts tasks, the coder implements, and tests prove correctness.",
+    uc_3_title: "Refactoring at Scale", uc_3_p: "Update 20 files to a new API, rename symbols across packages, or migrate test suites — one task per module.",
+    uc_4_title: "Test Generation", uc_4_p: "Generate missing unit tests for legacy code. Acceptance commands run new tests against old code.",
+    uc_5_title: "Documentation Sync", uc_5_p: "Keep READMEs, API docs, and decision records in sync with code changes.",
+    uc_6_title: "Multi-Repo Updates", uc_6_p: "Run the same task queue against multiple repositories. Each gets its own branch, journal, and cost tracking.",
+    start_label: "Quick Start",
+    why_label: "Why agent-forge?",
+    why_1_title: "Budget Caps", why_1_p: "Per-task, per-run, and per-day USD limits. Exceed a cap and the task becomes blocked with a reason — no runaway bills.",
+    why_2_title: "Scope Control", why_2_p: "Agents can only write where you allow. Attempts to touch canon/ or install dependencies are blocked in code.",
+    why_3_title: "Second Model Review", why_3_p: "A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop.",
+    why_4_title: "Full Audit Trail", why_4_p: "Every token, every command, every cost is written to runs/<id>/events.jsonl.",
+    why_5_title: "Mock Mode", why_5_p: "Test the entire pipeline without an API key. Perfect for CI and local development.",
+    why_6_title: "Any Provider", why_6_p: "DeepSeek, OpenRouter free tiers, local Ollama, or your own endpoint. Presets are YAML — no code changes.",
+    footer_tag: "Controlled LLM code generation.", footer_docs: "Docs", footer_project: "Project", footer_meta: "Meta"
+  },
+  ru: {
+    nav_demo: "Демо", nav_how: "Как работает", nav_use: "Применение", nav_start: "Быстрый старт",
+    hero_lead: "Запускай десятки задач кодогенерации через LLM-агентов: реальные тестовые гейты, review второй моделью, жёсткие бюджетные капы и полный журнал на диске.",
+    btn_start: "Начать", btn_learn: "Как это работает",
+    p1_title: "Очередь задач", p1_desc: "DAG со scope и бюджетами",
+    p2_title: "Coder-агент", p2_desc: "Пишет код через инструменты",
+    p3_title: "Валидация", p3_desc: "Тесты и линтеры",
+    p4_title: "Ревью", p4_desc: "Вторая модель проверяет",
+    p5_title: "Починка", p5_desc: "Чинит или падает явно",
+    demo_label: "Живое демо", demo_subtitle: "Нажми <strong>Следующий шаг</strong>, чтобы пройти весь pipeline.",
+    tab_happy: "✅ Успешный путь", tab_repair: "🔧 Цикл починки",
+    btn_next: "▶ Следующий шаг", btn_auto: "⏵ Автовоспроизведение", btn_reset: "↺ Сброс",
+    demo_info: "Нажми <strong>Следующий шаг</strong>, чтобы запустить pipeline.",
+    how_label: "Как это работает",
+    how_1_title: "1. Определи задачи",
+    how_1_p: "Напиши очередь tasks.yaml: каждая задача имеет scope, acceptance-команды, бюджет и зависимости. Planner может сделать черновик из SPEC.md.",
+    how_1_l1: "Маски scope как gitignore",
+    how_1_l2: "Shell acceptance-команды",
+    how_1_l3: "Бюджет токенов и USD на задачу",
+    how_1_l4: "DAG-зависимости с topo-order",
+    how_2_title: "2. Агентный цикл с ограничениями",
+    how_2_p: "Coder-агент получает read_file, write_file, list_dir и run_command — ничего больше.",
+    how_2_l1: "Запись только в scope задачи",
+    how_2_l2: "canon/ всегда read-only",
+    how_2_l3: "npm install заблокирован в коде",
+    how_2_l4: "Нарушения логируются как события",
+    how_3_title: "3. Человеческий гейт перед merge",
+    how_3_p: "Ничего не мержится автоматически. Когда задача доходит до done, прогон останавливается до явного accept.",
+    how_3_l1: "forge accept <task-id> мержит ветку",
+    how_3_l2: "forge resume продолжает очередь",
+    how_3_l3: "Прогоны возобновляются со снапшотов",
+    how_3_l4: "Полный журнал в runs/<id>/events.jsonl",
+    use_label: "Применение",
+    uc_1_title: "Порты языков", uc_1_p: "Портируй Python-валидатор на TypeScript, Bash-скрипт на Go или легаси-модуль на новый фреймворк — с acceptance-тестами на паритет.",
+    uc_2_title: "Модули по спеке", uc_2_p: "Преврати SPEC.md в рабочую фичу: planner чертит задачи, coder реализует, тесты доказывают корректность.",
+    uc_3_title: "Рефакторинг в масштабе", uc_3_p: "Обнови 20 файлов под новый API, переименуй символы across packages или мигрируй тесты — по одной задаче на модуль.",
+    uc_4_title: "Генерация тестов", uc_4_p: "Сгенерируй недостающие юнит-тесты для легаси. Acceptance-команды прогоняют новые тесты против старого кода.",
+    uc_5_title: "Синхронизация документации", uc_5_p: "Держи README, API-доки и decision records в синхроне с изменениями кода.",
+    uc_6_title: "Мульти-репо обновления", uc_6_p: "Гоняй одну и ту же очередь задач по нескольким репозиториям. Каждый получает свою ветку, журнал и трекинг стоимости.",
+    start_label: "Быстрый старт",
+    why_label: "Почему agent-forge?",
+    why_1_title: "Бюджетные капы", why_1_p: "Лимиты per-task, per-run и per-day в USD. Превышение → задача blocked с причиной — нет runaway-списаний.",
+    why_2_title: "Контроль scope", why_2_p: "Агент пишет только туда, куда разрешено. Попытки залезть в canon/ или ставить зависимости блокируются в коде.",
+    why_3_title: "Второе мнение", why_3_p: "Дешевая reviewer-модель проверяет каждый результат по чек-листу. Провалы уходят в bounded repair-цикл.",
+    why_4_title: "Полный аудит", why_4_p: "Каждый токен, каждая команда, каждый доллар — в runs/<id>/events.jsonl.",
+    why_5_title: "Mock-режим", why_5_p: "Тестируй весь pipeline без API-ключа. Идеально для CI и разработки самого agent-forge.",
+    why_6_title: "Любой провайдер", why_6_p: "DeepSeek, бесплатные модели OpenRouter, локальный Ollama или свой endpoint. Пресеты — YAML, без правки кода.",
+    footer_tag: "Управляемая агентная кодогенерация.", footer_docs: "Доки", footer_project: "Проект", footer_meta: "Мета"
+  }
+};
+
+let currentLang = 'en';
+function setLang(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.getElementById('langSwitch').textContent = lang === 'en' ? 'RU' : 'EN';
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (I18N[lang][key]) el.innerHTML = I18N[lang][key];
+  });
+  // Re-render demo if active
+  if (demoStep >= 0) renderDemo();
+}
+document.getElementById('langSwitch').addEventListener('click', () => {
+  setLang(currentLang === 'en' ? 'ru' : 'en');
+});
+
+/* ===== Hero character stagger (from DRkP7PQd) ===== */
+(function staggerHero() {
+  const h1 = document.getElementById('heroTitle');
+  if (!h1) return;
+  const text = h1.innerHTML;
+  let out = '';
+  let delay = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '<') { out += ch; continue; }
+    if (text[i-1] === '<' || (i > 1 && text[i-2] === '<')) { out += ch; continue; }
+    if (ch === '>') { out += ch; continue; }
+    if (ch === ' ' || ch === '\n') { out += ch; continue; }
+    out += `<span class="char" style="animation-delay:${delay}s">${ch}</span>`;
+    delay += 0.025;
+  }
+  h1.innerHTML = out;
+})();
+
+/* ===== Live Demo ===== */
+const SCENARIOS = {
+  happy: [
+    { state: 'queued', info: 'Task <strong>port-validator</strong> is queued.', log: ['[runner] Task port-validator queued'], cardCls: '' },
+    { state: 'running', info: 'The <strong>coder</strong> agent writes code inside the allowed scope.', log: ['[coder] read_file: tools/validate.py','[coder] write_file: tools-ts/validate.ts (1.2K)','[coder] run_command: cd tools-ts && npm test','[coder] DONE — 12 steps'], cardCls: '' },
+    { state: 'validating', info: 'Runner executes <strong>acceptance</strong> commands.', log: ['[validate] npm test → exit=0','[validate] 47/47 passed'], cardCls: '' },
+    { state: 'review', info: 'Second model <strong>reviews</strong> the result.', log: ['[reviewer] Checking scope, tests, deps','[reviewer] Verdict: APPROVE ✅'], cardCls: '' },
+    { state: 'done', info: 'Task <strong>done</strong>. Commit on branch <code>forge/port-validator</code>.', log: ['[git] committed 2 files','[done] port-validator — $0.17'], cardCls: 'done' }
+  ],
+  repair: [
+    { state: 'queued', info: 'Task <strong>api-refactor</strong> queued. Budget: $0.80.', log: ['[runner] Task api-refactor queued'], cardCls: '' },
+    { state: 'running', info: 'Coder rewrites API surface.', log: ['[coder] read_file: src/api/handlers.py','[coder] write_file: src/api/v2/handlers.py (2.1K)','[coder] DONE — 18 steps'], cardCls: '' },
+    { state: 'validating', info: '❌ <strong>Acceptance fails</strong> — 3 tests broken.', log: ['[validate] pytest → exit=1','[validate] 3 failed, 9 passed'], cardCls: 'failed' },
+    { state: 'review', info: 'Reviewer: <strong>REWORK</strong> → repair loop.', log: ['[reviewer] backward compat broken','[reviewer] Verdict: REWORK 🔧'], cardCls: 'repair' },
+    { state: 'running', info: '<strong>Repair agent</strong> fixes the code.', log: ['[repair] write_file: src/api/v2/compat.py','[repair] FIXED — iteration 1/3'], cardCls: 'repair' },
+    { state: 'validating', info: 'All tests <strong>green</strong>.', log: ['[validate] pytest → exit=0','[validate] 12/12 passed'], cardCls: '' },
+    { state: 'review', info: 'Reviewer: <strong>APPROVE</strong>.', log: ['[reviewer] compat shim OK','[reviewer] Verdict: APPROVE ✅'], cardCls: '' },
+    { state: 'done', info: 'Done after <strong>1 repair</strong>. Total: $0.42.', log: ['[git] committed 4 files','[done] api-refactor — $0.42 · 1 repair'], cardCls: 'done' }
+  ]
+};
+
+let currentScenario = 'happy';
+let demoStep = -1;
+let autoTimer = null;
+
+function getSteps() { return SCENARIOS[currentScenario]; }
+function getTaskName() { return currentScenario === 'happy' ? 'port-validator' : 'api-refactor'; }
+
+const cardHTML = (name) => `
+  <div class="demo-card" id="demoCard">
+    <div class="title">${name}</div>
+    <div class="meta">${currentScenario === 'happy' ? 'scope: tools-ts/** · budget: $0.50' : 'scope: src/api/** · budget: $0.80 · max repairs: 3'}</div>
+  </div>
+`;
+
+function renderDemo() {
+  const STEPS = getSteps();
+  document.querySelectorAll('.demo-col .dropzone').forEach(z => z.innerHTML = '');
+  const state = demoStep >= 0 && demoStep < STEPS.length ? STEPS[demoStep].state : 'queued';
+  const zone = document.getElementById('col-' + state);
+  if (zone) zone.innerHTML = cardHTML(getTaskName());
+  document.querySelectorAll('.demo-col').forEach(c => c.classList.remove('active'));
+  const activeCol = document.querySelector('.demo-col[data-state="' + state + '"]');
+  if (activeCol) activeCol.classList.add('active');
+  const card = document.getElementById('demoCard');
+  if (card && demoStep >= 0) {
+    const cls = STEPS[demoStep].cardCls;
+    if (cls) card.classList.add(cls);
+  }
+  const info = document.getElementById('demoInfo');
+  if (demoStep >= 0 && demoStep < STEPS.length) {
+    info.innerHTML = STEPS[demoStep].info;
+  } else if (demoStep >= STEPS.length) {
+    info.innerHTML = currentScenario === 'repair'
+      ? '🔧 Task done after <strong>repair loop</strong>.'
+      : '🎉 Pipeline complete.';
+  } else {
+    info.innerHTML = currentLang === 'ru'
+      ? 'Нажми <strong>Следующий шаг</strong>, чтобы запустить pipeline.'
+      : 'Press <strong>Next Step</strong> to start the pipeline.';
+  }
+}
+
+function addLog(lines) {
+  const log = document.getElementById('demoLog');
+  lines.forEach(line => {
+    const div = document.createElement('div');
+    div.className = 'entry';
+    div.innerHTML = line;
+    log.appendChild(div);
+  });
+  log.scrollTop = log.scrollHeight;
+}
+
+function nextStep() {
+  const STEPS = getSteps();
+  if (demoStep >= STEPS.length) return;
+  demoStep++;
+  renderDemo();
+  if (demoStep < STEPS.length) addLog(STEPS[demoStep].log);
+}
+
+function resetDemo() {
+  demoStep = -1;
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  const name = getTaskName();
+  document.getElementById('demoLog').innerHTML = `<div class="entry">[system] agent-forge demo ready. Task: <strong>${name}</strong></div>`;
+  renderDemo();
+}
+
+function autoPlay() {
+  resetDemo();
+  nextStep();
+  autoTimer = setInterval(() => {
+    if (demoStep >= getSteps().length - 1) { clearInterval(autoTimer); autoTimer = null; return; }
+    nextStep();
+  }, 1800);
+}
+
+function switchScenario(key) {
+  currentScenario = key;
+  document.querySelectorAll('.scenario-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.scenario-tab[data-scenario="' + key + '"]').classList.add('active');
+  resetDemo();
+}
+
+document.getElementById('demoNext').addEventListener('click', () => {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  nextStep();
+});
+document.getElementById('demoReset').addEventListener('click', resetDemo);
+document.getElementById('demoAuto').addEventListener('click', autoPlay);
+document.querySelectorAll('.scenario-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchScenario(tab.dataset.scenario));
+});
+
+renderDemo();
+</script>
+</body>
+</html>
