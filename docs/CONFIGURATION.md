@@ -1,187 +1,160 @@
-# CONFIGURATION — полный справочник по конфигурации agent-forge
+# CONFIGURATION — Complete agent-forge Configuration Reference
 
-Как переиспользовать agent-forge в любом другом проекте: переменные окружения,
-`config/models.yaml`, пресеты провайдеров, `tasks.yaml`, библиотека промптов,
-требования к целевому репозиторию, заметки по платформам.
+How to reuse agent-forge in any other project: environment variables, `config/models.yaml`, provider presets, `tasks.yaml`, prompt library, target repository requirements, platform notes.
 
-Источники истины в коде: `forge/config.py` (env + models.yaml + пресет),
-`forge/models.py` (схема tasks.yaml), `forge/prompts.py` (промпты).
+Sources of truth in code: `forge/config.py` (env + models.yaml + preset), `forge/models.py` (tasks.yaml schema), `forge/prompts.py` (prompts).
 
-## 1. Переменные окружения
+## 1. Environment Variables
 
-Все переменные читаются дважды за запуск: из `os.environ` (приоритет) и из
-файла `.env` в корне agent-forge (простой парсер `KEY=VALUE`, без внешних
-зависимостей; `forge/config.py:load_env_file`). `.env` — в `.gitignore`,
-в журнал прогонов секреты не пишутся (NFR-3).
+All variables are read twice per launch: from `os.environ` (priority) and from `.env` file in agent-forge root (simple `KEY=VALUE` parser, no external deps; `forge/config.py:load_env_file`). `.env` is in `.gitignore`, secrets are not written to run journals (NFR-3).
 
-| Переменная | Формат | Дефолт | Где читается |
+| Variable | Format | Default | Read in |
 |---|---|---|---|
-| `FORGE_HOME` | путь | родитель пакета `forge/` (исходный checkout) | `forge/config.py:forge_root` — корень, откуда берутся `config/`, `prompts/`, `runs/`, `.env` |
-| `FORGE_PROVIDER` | путь к пресету (относительный — от корня) | `config/providers/deepseek.yaml` | `load_config` |
-| `FORGE_MOCK` | `1` / `true` / `yes` (без учёта регистра) | выкл. | `load_config` → `make_client` (MockClient вместо OpenAI API) |
-| `FORGE_MOCK_SCENARIO` | `default` / `rogue` | `default` | `MockClient.scenario` (`forge/llm.py`); `rogue` — coder сначала пытается писать вне scope (проверка scope-контроля) |
-| `FORGE_BASE_URL` | URL OpenAI-совместимого endpoint | `provider.base_url` из пресета | `load_config`, общий fallback для всех ролей |
-| `FORGE_API_KEY` | строка ключа | ключ из `api_key_env` пресета | `load_config`, общий fallback для всех ролей |
-| `FORGE_<ROLE>_BASE_URL` | URL | `FORGE_BASE_URL` → пресет | `load_config`; ROLE ∈ PLANNER, CODER, REVIEWER, REPAIR |
-| `FORGE_<ROLE>_API_KEY` | строка ключа | `FORGE_API_KEY` → `api_key_env` пресета | `load_config` |
-| `FORGE_<ROLE>_MODEL` | имя модели | пресет `roles.<role>.model` → `models.yaml` | `load_config` |
-| `<API_KEY_ENV>` из пресета | напр. `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `PROVOD_API_KEY` | — | `load_config`, если нет `FORGE_*_API_KEY` |
+| `FORGE_HOME` | path | parent of `forge/` package (source checkout) | `forge/config.py:forge_root` — root where `config/`, `prompts/`, `runs/`, `.env` are taken from |
+| `FORGE_PROVIDER` | path to preset (relative from root) | `config/providers/deepseek.yaml` | `load_config` |
+| `FORGE_MOCK` | `1` / `true` / `yes` (case-insensitive) | off | `load_config` → `make_client` (MockClient instead of OpenAI API) |
+| `FORGE_MOCK_SCENARIO` | `default` / `rogue` | `default` | `MockClient.scenario` (`forge/llm.py`); `rogue` — coder first tries to write outside scope (scope control test) |
+| `FORGE_BASE_URL` | OpenAI-compatible endpoint URL | `provider.base_url` from preset | `load_config`, common fallback for all roles |
+| `FORGE_API_KEY` | key string | key from `api_key_env` preset | `load_config`, common fallback for all roles |
+| `FORGE_<ROLE>_BASE_URL` | URL | `FORGE_BASE_URL` → preset | `load_config`; ROLE ∈ PLANNER, CODER, REVIEWER, REPAIR |
+| `FORGE_<ROLE>_API_KEY` | key string | `FORGE_API_KEY` → `api_key_env` preset | `load_config` |
+| `FORGE_<ROLE>_MODEL` | model name | preset `roles.<role>.model` → `models.yaml` | `load_config` |
+| `<API_KEY_ENV>` from preset | e.g. `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `PROVOD_API_KEY` | — | `load_config`, if no `FORGE_*_API_KEY` |
 
-Порядок разрешения для роли (на примере coder):
-`base_url`: `FORGE_CODER_BASE_URL` → `FORGE_BASE_URL` → `provider.base_url` из пресета.
-`api_key`: `FORGE_CODER_API_KEY` → `FORGE_API_KEY` → значение переменной, названной в `api_key_env` пресета.
-`model`: `FORGE_CODER_MODEL` → `roles.coder.model` пресета → `roles.coder.model` из `models.yaml`.
+Resolution order for a role (coder example):
+`base_url`: `FORGE_CODER_BASE_URL` → `FORGE_BASE_URL` → `provider.base_url` from preset.
+`api_key`: `FORGE_CODER_API_KEY` → `FORGE_API_KEY` → value of variable named in preset's `api_key_env`.
+`model`: `FORGE_CODER_MODEL` → `roles.coder.model` from preset → `roles.coder.model` from `models.yaml`.
 
-Если не mock-режим, ключа нет и пресет требует `api_key_env` — `load_config`
-падает с понятной ошибкой (предлагает задать ключ, `FORGE_MOCK=1` или пресет ollama).
+If not mock mode, no key and preset requires `api_key_env` — `load_config` fails with clear error (suggests setting key, `FORGE_MOCK=1`, or ollama preset).
 
 ## 2. config/models.yaml
 
-Модельная карта ролей и бюджеты. Смена модели/прайса = правка этого файла, не кода.
+Role model map and budgets. Changing model/price = editing this file, not code.
 
 ```yaml
 roles:
-  planner:                    # planner / coder / reviewer / repair — все четыре обязательны
-    model: deepseek-v4-pro    # дефолт, если пресет провайдера не переопределяет роль
-    max_tokens: 16000         # лимит completion-токенов на ОДИН вызов (обрывает write_file больших файлов — не занижать)
+  planner:                    # planner / coder / reviewer / repair — all four required
+    model: deepseek-v4-pro    # default if provider preset does not override role
+    max_tokens: 16000         # completion token limit per SINGLE call (truncates large write_file — do not lower)
     temperature: 0.2
-    price_per_m_in: 0.435     # USD за 1M входных токенов — из прайса провайдера
-    price_per_m_out: 0.87     # USD за 1M выходных токенов
+    price_per_m_in: 0.435     # USD per 1M input tokens — from provider price list
+    price_per_m_out: 0.87     # USD per 1M output tokens
   coder:    { ... }
   reviewer: { ... }
   repair:   { ... }
 
-budgets:                      # дефолты; задача может переопределить свои (см. tasks.yaml)
-  per_task_max_tokens: 2000000    # кап токенов (in+out) на задачу; от зацикливания, не от честной работы
-  per_run_max_cost_usd: 2.00      # кап стоимости прогона; достигнут — прогон останавливается
-  per_day_max_cost_usd: 5.00      # кап стоимости за сутки UTC по всем runs/*/events.jsonl
-  repair_max_iterations: 3        # глубина repair-цикла (FR-3)
+budgets:                      # defaults; task may override its own (see tasks.yaml)
+  per_task_max_tokens: 2000000    # token cap (in+out) per task; against loops, not honest work
+  per_run_max_cost_usd: 2.00      # run cost cap; reached — run stops
+  per_day_max_cost_usd: 5.00      # cost cap per UTC day across all runs/*/events.jsonl
+  repair_max_iterations: 3        # repair loop depth (FR-3)
 
-retry:                        # отказы провайдера: 429/5xx и сетевые ошибки
+retry:                        # provider failures: 429/5xx and network errors
   max_attempts: 5
-  backoff_seconds: [5, 15, 45, 120, 300]   # пауза после i-й попытки; free-лимиты RPM сюда же
+  backoff_seconds: [5, 15, 45, 120, 300]   # pause after i-th attempt; free RPM limits handled here too
 ```
 
-Цены — декларативные: `forge report` и бюджетные капы считают стоимость отсюда
-(`RoleConfig.cost_usd`). Перед прогоном сверять с актуальным прайсом провайдера.
+Prices are declarative: `forge report` and budget caps calculate cost from here (`RoleConfig.cost_usd`). Verify against actual provider price list before running.
 
-## 3. config/providers/*.yaml — пресет провайдера
+## 3. config/providers/*.yaml — Provider Preset
 
-Формат (разбор — `forge/config.py:load_config`):
+Format (parsed in `forge/config.py:load_config`):
 
 ```yaml
 provider:
-  name: provod                       # человекочитаемое имя (в run.json)
-  base_url: https://api.provod.ai/v1 # OpenAI-совместимый endpoint ({base_url}/chat/completions)
-  api_key_env: PROVOD_API_KEY        # имя env-переменной с ключом; пусто/отсутствует = ключ не нужен (ollama)
-  api_style: openai-compatible       # информационное поле, код не читает
-  limits:                            # информационный блок (rpm, дневные лимиты), код не читает
+  name: provod                       # human-readable name (in run.json)
+  base_url: https://api.provod.ai/v1 # OpenAI-compatible endpoint ({base_url}/chat/completions)
+  api_key_env: PROVOD_API_KEY        # env variable name for key; empty/absent = key not needed (ollama)
+  api_style: openai-compatible       # informational field, code does not read
+  limits:                            # informational block (rpm, daily limits), code does not read
     rpm: null
 
-roles:                               # переопределение моделей ролей под этого провайдера (опционально)
+roles:                               # role model overrides for this provider (optional)
   planner:  { model: deepseek-v4-pro }
   coder:    { model: deepseek-v4-pro }
-  reviewer: { model: deepseek-v4-flash }   # reviewer — дешёвая чек-листовая роль
+  reviewer: { model: deepseek-v4-flash }   # reviewer — cheap checklist role
   repair:   { model: deepseek-v4-pro }
 
-fallback_models:                     # перебор при перманентном отказе основной модели роли
+fallback_models:                     # fallback on permanent failure of role's primary model
   - deepseek-v4-flash
   - glm-5
 ```
 
-Существующие пресеты: `deepseek.yaml` (дефолт), `openrouter-free.yaml`
-(бесплатные модели `:free`), `ollama.yaml` (локально, без ключа), `provod.yaml`.
-Свой провайдер = новый файл здесь же + `--provider config/providers/my.yaml`
-или `FORGE_PROVIDER=...`.
+Existing presets: `deepseek.yaml` (default), `openrouter-free.yaml` (free `:free` models), `ollama.yaml` (local, no key), `provod.yaml`.
+Custom provider = new file here + `--provider config/providers/my.yaml` or `FORGE_PROVIDER=...`.
 
-## 4. tasks.yaml — очередь задач
+## 4. tasks.yaml — Task Queue
 
-Схема (парсинг и валидация — `forge/models.py:load_tasks`):
+Schema (parsing and validation — `forge/models.py:load_tasks`):
 
 ```yaml
-package: my-package              # имя пакета (дефолт — имя файла)
-canon_snapshot: canon/decisions.json   # опционально: файл из target-репо, прикладывается выдержкой к промпту задачи
+package: my-package              # package name (default — file name)
+canon_snapshot: canon/decisions.json   # optional: file from target repo, excerpt appended to task prompt
 
 tasks:
-  - id: my-task-1                # обязательно; kebab-case: ^[a-z0-9][a-z0-9-]*$; уникальный
-    title: "Короткое имя"        # дефолт — id; показывается в status/UI
-    spec_ref: "SPEC.md §3.1"     # ссылка на источник истины (информативно, идёт в промпт)
-    scope_paths:                 # обязательно, непусто: куда coder МОЖЕТ писать
-      - "src/feature/**"         # gitignore-подобные маски: ** — через /, * — внутри сегмента
-    depends_on: []               # DAG; циклы и висячие ссылки — ошибка загрузки
-    acceptance:                  # команды гейта №2; исполняет runner (доверенные), все должны дать exit 0
+  - id: my-task-1                # required; kebab-case: ^[a-z0-9][a-z0-9-]*$; unique
+    title: "Short name"          # default — id; shown in status/UI
+    spec_ref: "SPEC.md §3.1"     # link to source of truth (informational, goes into prompt)
+    scope_paths:                 # required, non-empty: where coder MAY write
+      - "src/feature/**"         # gitignore-like masks: ** across /, * inside segment
+    depends_on: []               # DAG; cycles and dangling refs are load errors
+    acceptance:                  # gate #2 commands; executed by runner (trusted), all must exit 0
       - "cd src/feature && npm test"
-    budget:                      # опционально: перезадачные капы (иначе дефолты models.yaml)
+    budget:                      # optional: per-task cap overrides (otherwise models.yaml defaults)
       max_tokens: 150000
       max_cost_usd: 0.50
-    gate: milestone-1            # опционально: метка милстоуна (см. ниже)
+    gate: milestone-1            # optional: milestone label (see below)
 ```
 
-Семантика:
+Semantics:
 
-- **Порядок** — топологический по `depends_on`; при равенстве — порядок в файле.
-  Задачи идут последовательно, параллелизма нет (NFR-2, free-лимиты).
-- **Состояния**: `queued → running → validating → review → done | failed | blocked`.
-  Repair-итерация — повторный `running`; число итераций — в `tasks/<id>.json`.
-  `DISPUTE`/`BLOCKED`/`GAP` от агента → `blocked` (решает человек), `STUCK`/
-  исчерпание шагов/итераций → `failed`.
-- **gate**: после того как задача с меткой `gate` дошла до `done`, прогон встаёт
-  на паузу до явного `forge accept <id>` (человеческий гейт №3: accept фиксирует
-  приёмку и мержит ветку `forge/<id>` локально). Продолжение — `forge resume <run_id>`.
-  Гейт сдерживает только `done`-задачи: `failed` волну не блокирует (by design).
-- **resume**: `forge run`/`resume` пропускает задачи в `done`; снапшоты диалога
-  `tasks/<id>.<phase>.history.json` позволяют продолжить убитую посреди фазы задачу
-  с контекстом и сохранённым счётчиком шагов.
-- **acceptance** исполняется runner'ом как есть (shell, cwd = корень target-репо,
-  таймаут 300 с на команду) — whitelist инструментов на них НЕ действует.
+- **Order** — topological by `depends_on`; ties — file order.
+  Tasks run sequentially, no parallelism (NFR-2, free limits).
+- **States**: `queued → running → validating → review → done | failed | blocked`.
+  Repair iteration — repeated `running`; iteration count — in `tasks/<id>.json`.
+  `DISPUTE`/`BLOCKED`/`GAP` from agent → `blocked` (human resolves), `STUCK`/
+  step exhaustion/iterations → `failed`.
+- **gate**: after a task with `gate` label reaches `done`, run pauses until explicit `forge accept <id>` (human gate #3: accept records acceptance and locally merges `forge/<id>` branch). Continuation — `forge resume <run_id>`.
+  Gate holds only `done` tasks: `failed` does not block wave (by design).
+- **resume**: `forge run`/`resume` skips `done` tasks; dialogue snapshots `tasks/<id>.<phase>.history.json` allow continuing a task killed mid-phase with context and preserved step counter.
+- **acceptance** is executed by runner as-is (shell, cwd = target repo root, 300s timeout per command) — tool whitelist does NOT apply.
 
-## 5. prompts/ — библиотека промптов
+## 5. prompts/ — Prompt Library
 
-Вся текстовка промптов — файлы в `prompts/`, не в коде (SPEC §7):
+All prompt text — files in `prompts/`, not in code (SPEC §7):
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `00_system.md` | системный промпт, общий для всех ролей |
-| `10_planner.md` | planner: SPEC → черновик tasks.yaml (`forge import`) |
-| `20_codegen.md` | coder: правила цикла, маркеры DONE/BLOCKED/GAP, запрет коммита |
-| `30_reviewer.md` | reviewer: чек-лист ревью, вердикты APPROVE/REWORK/REJECT |
-| `40_repair.md` | repair: починка по вердикту, маркеры STUCK/DISPUTE |
-| `50_task_template.md` | шаблон промпта задачи (плейсхолдеры `{{task.id}}` и т.п.) |
-| `60_target_AGENTS.md` | образец AGENTS.md для целевого репозитория |
+| `00_system.md` | system prompt, shared across all roles |
+| `10_planner.md` | planner: SPEC → tasks.yaml draft (`forge import`) |
+| `20_codegen.md` | coder: loop rules, DONE/BLOCKED/GAP markers, commit prohibition |
+| `30_reviewer.md` | reviewer: review checklist, verdicts APPROVE/REWORK/REJECT |
+| `40_repair.md` | repair: fix per verdict, STUCK/DISPUTE markers |
+| `50_task_template.md` | task prompt template (placeholders `{{task.id}}` etc.) |
+| `60_target_AGENTS.md` | sample AGENTS.md for target repository |
 
-Версионирование: каталог под git; версия библиотеки фиксируется в `run.json`
-(`prompts_version`) как git-хеш последнего коммита, трогавшего `prompts/`
-(вне git — sha256 содержимого; `forge/prompts.py:prompts_version`).
+Versioning: directory under git; library version is recorded in `run.json` (`prompts_version`) as git hash of last commit touching `prompts/` (outside git — sha256 of content; `forge/prompts.py:prompts_version`).
 
-## 6. Как натравить forge на другой проект
+## 6. Pointing forge at Another Project
 
 ```bash
-pip install -e .            # в репозитории agent-forge
+pip install -e .            # in agent-forge repository
 forge run --tasks path/to/tasks.yaml --target /path/to/target-repo --spec path/to/SPEC.md
 ```
 
-- `--tasks` — очередь задач (см. §4). Черновик из спеки: `forge import --spec SPEC.md --out tasks.draft.yaml`, затем вычитать и поправить руками (гейт №1).
-- `--target` — корень целевого репозитория (дефолт — текущий каталог). Все пути
-  инструментов и acceptance-команды относительны ему.
-- Требования к целевому репо:
-  - Желателен `AGENTS.md` в корне (образец — `prompts/60_target_AGENTS.md`):
-    стек, команды тестов, соглашения — coder читает его как часть контекста.
-  - Acceptance-команды должны работать из корня target-репо (тесты, линтеры).
-  - git необязателен: без репозитория ветвление/коммит пропускаются с записью
-    в журнал. С git — ветка `forge/<task-id>` на задачу, локальный коммит после
-    APPROVE; push никогда не делается (NFR-5).
-  - Зависимости ставит владелец заранее: агенту `npm install`/`pip install` и т.п.
-    заблокированы на уровне инструмента (AF-10).
-- Прогон и UI независимы: `forge ui` читает `runs/` и работает параллельно.
+- `--tasks` — task queue (see §4). Draft from spec: `forge import --spec SPEC.md --out tasks.draft.yaml`, then edit manually (gate #1).
+- `--target` — target repository root (default — current directory). All tool paths and acceptance commands are relative to it.
+- Target repo requirements:
+  - `AGENTS.md` in root is recommended (sample — `prompts/60_target_AGENTS.md`): stack, test commands, conventions — coder reads it as part of context.
+  - Acceptance commands must work from target repo root (tests, linters).
+  - git is optional: without repository branching/commit is skipped with journal entry.
+    With git — branch `forge/<task-id>` per task, local commit after APPROVE; push is never done (NFR-5).
+  - Dependencies are installed by owner in advance: `npm install`/`pip install` etc. are blocked at tool level (AF-10).
+- Run and UI are independent: `forge ui` reads `runs/` and works in parallel.
 
-## 7. Замечания по платформам
+## 7. Platform Notes
 
-- **Windows (референс, NFR-1)**: Git Bash; пути с пробелами допустимы. Дочерним
-  процессам прокидываются дефолты `ProgramFiles` / `ProgramFiles(x86)` /
-  `ProgramW6432` — без них NuGet/`dotnet` падают в урезанных окружениях
-  (`forge/tools.py:_WINDOWS_ENV_DEFAULTS`). Команды исполняются через `shell=True`
-  (cmd-семантика для runner и инструментов).
-- **Linux/macOS**: особенностей нет — чистый Python, состояние на диске, демонов
-  нет. CI матрица (GitHub Actions) гоняет ubuntu + windows на Python 3.12/3.13.
-- **Docker**: образ на `python:3.12-slim`; `runs/` и target-репо — volume'ами
-  (см. README). В контейнере `FORGE_HOME` не нужен — корень определяется по пакету.
+- **Windows (reference, NFR-1)**: Git Bash; paths with spaces allowed. Child processes receive `ProgramFiles` / `ProgramFiles(x86)` / `ProgramW6432` defaults — without them NuGet/`dotnet` fail in stripped environments (`forge/tools.py:_WINDOWS_ENV_DEFAULTS`). Commands execute via `shell=True` (cmd semantics for runner and tools).
+- **Linux/macOS**: no peculiarities — pure Python, state on disk, no daemons. CI matrix (GitHub Actions) runs ubuntu + windows on Python 3.12/3.13.
+- **Docker**: image on `python:3.12-slim`; `runs/` and target repo — volumes (see README). In container `FORGE_HOME` is not needed — root is determined by package.

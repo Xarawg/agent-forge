@@ -1,85 +1,63 @@
 # ARCHITECTURE — agent-forge
 
-Версия 0.1 · 19.08.2026 · По спецификации `docs/design/specs/agent-forge/SPEC.md` v1.0.
+Version 0.1 · 19.08.2026 · Per specification `docs/design/specs/agent-forge/SPEC.md` v1.0.
 
-## Обзор
+## Overview
 
-Один CLI (`forge`), одна команда = один прогон (NFR-2). Состояние целиком на
-диске в `runs/<run_id>/` — процесс можно убить и продолжить `forge resume`.
-Параллелизма нет: задачи идут последовательно в топологическом порядке DAG
-(§7 — free-лимиты провайдеров).
+One CLI (`forge`), one command = one run (NFR-2). State is entirely on disk in `runs/<run_id>/` — the process can be killed and continued with `forge resume`. No parallelism: tasks run sequentially in DAG topological order (§7 — free provider limits).
 
-## Поток прогона (`forge run`)
+## Run Flow (`forge run`)
 
 ```
 tasks.yaml ──load_tasks──► DAG (topo_order)
         │
-        ▼  для каждой задачи
-   ┌─────────────┐   blocked  ◄── бюджетные капы (per-task/run/day)
-   │ gate check  │── пауза ◄── предыдущая gated-задача done и не accepted
+        ▼ for each task
+   ┌─────────────┐   blocked  ◄── budget caps (per-task/run/day)
+   │ gate check  │── pause ◄── previous gated task done and not accepted
    └─────────────┘
         ▼ running
-   coder-цикл (run_tool_agent): модель ↔ tools(read/write/list/run_command)
-        ▼ маркер DONE / BLOCKED / GAP / STEPS_EXHAUSTED
-   validating: acceptance-команды (доверенные, из tasks.yaml)
+   coder loop (run_tool_agent): model ↔ tools(read/write/list/run_command)
+        ▼ marker DONE / BLOCKED / GAP / STEPS_EXHAUSTED
+   validating: acceptance commands (trusted, from tasks.yaml)
         ▼
-   review: reviewer-роль по чек-листу prompts/30 (без инструментов)
-        ▼ APPROVE+зелёное ──► git commit ──► done
-        ▼ REWORK/красное ──► repair-цикл (≤3 итераций) ──► failed
+   review: reviewer role via prompts/30 checklist (no tools)
+        ▼ APPROVE+green ──► git commit ──► done
+        ▼ REWORK/red ──► repair loop (≤3 iterations) ──► failed
         ▼ REJECT ──► failed
 ```
 
-## Модули `forge/`
+## `forge/` Modules
 
-| Модуль | Ответственность |
+| Module | Responsibility |
 |---|---|
 | `cli.py` | argparse: run / resume / status / log / report / accept / import |
-| `config.py` | models.yaml + пресет провайдера + .env; сборка RoleConfig по ролям |
-| `models.py` | tasks.yaml: парсинг, валидация, DAG, состояния задач |
-| `llm.py` | `LLMClient`-протокол; `OpenAIClient` (retry/backoff, fallback-модели); `MockClient` |
-| `tools.py` | Инструменты агента; scope-контроль; whitelist команд |
-| `agents.py` | Цикл «модель ↔ инструменты»; одношаговый reviewer; маркеры |
-| `runner.py` | Оркестрация фаз, бюджеты, гейты, git |
+| `config.py` | models.yaml + provider preset + .env; builds RoleConfig per role |
+| `models.py` | tasks.yaml: parsing, validation, DAG, task states |
+| `llm.py` | `LLMClient` protocol; `OpenAIClient` (retry/backoff, fallback models); `MockClient` |
+| `tools.py` | Agent tools; scope control; command whitelist |
+| `agents.py` | "model ↔ tools" loop; single-step reviewer; markers |
+| `runner.py` | Phase orchestration, budgets, gates, git |
 | `journal.py` | run.json, events.jsonl, tasks/<id>.json |
-| `report.py` | Сводки status/report из журнала |
-| `prompts.py` | Загрузка/рендер промптов; версия библиотеки (git hash / sha256) |
+| `report.py` | status/report summaries from journal |
+| `prompts.py` | Prompt loading/rendering; library version (git hash / sha256) |
 
-## Ключевые механизмы
+## Key Mechanisms
 
-### Scope-контроль (§FR-2, §6.5, §7)
-`ToolBox.write_file` нормализует путь, запрещает выход за корень target-репо
-(`..`), всегда запрещает `canon/`, затем матчит на gitignore-подобные маски
-`scope_paths` (`**` — через разделители, `*` — внутри сегмента). Нарушение
-возвращается модели как `ERROR:` и пишется в журнал с пометкой `SCOPE_VIOLATION`.
+### Scope Control (§FR-2, §6.5, §7)
+`ToolBox.write_file` normalizes path, forbids escaping target repo root (`..`), always forbids `canon/`, then matches against gitignore-like `scope_paths` masks (`**` — across separators, `*` — inside segment). Violation is returned to model as `ERROR:` and logged with `SCOPE_VIOLATION` tag.
 
-### Бюджеты (§FR-5)
-Проверяются перед стартом задачи и перед каждой repair-итерацией. per-day кап
-считается суммой `cost_usd` по всем `runs/*/events.jsonl` за текущие сутки UTC.
-Превышение → задача в `blocked`, причина в журнале и в `forge status`.
+### Budgets (§FR-5)
+Checked before task start and before each repair iteration. per-day cap is sum of `cost_usd` across all `runs/*/events.jsonl` for current UTC day. Exceeding → task `blocked`, reason in journal and `forge status`.
 
-### Воспроизводимость (§FR-7)
-`run.json` фиксирует: провайдер, mock-флаг, модели ролей, версию промптов
-(git-хеш последнего коммита `prompts/`; вне git — sha256 содержимого).
-`forge report` считает цену по прайсу из `config/models.yaml`.
+### Reproducibility (§FR-7)
+`run.json` records: provider, mock flag, role models, prompts version (git hash of last commit touching `prompts/`; outside git — sha256 of content). `forge report` calculates cost from `config/models.yaml` prices.
 
-### Mock-режим (§6.3)
-`MockClient` — детерминированный стенд по ролям: coder пишет
-`<scope>/mock_output.md` и завершает DONE; repair пишет `mock_state.txt` с
-`iteration-N`; reviewer — APPROVE при зелёном acceptance, иначе REWORK;
-planner — валидный YAML-черновик. Сценарий `FORGE_MOCK_SCENARIO=rogue`
-проверяет scope-контроль. Токены считаются от длины сообщений, стоимость —
-по прайсу конфига, так что отчёты и капы прогоняются по-настоящему.
+### Mock Mode (§6.3)
+`MockClient` — deterministic role-based stub: coder writes `<scope>/mock_output.md` and finishes DONE; repair writes `mock_state.txt` with `iteration-N`; reviewer — APPROVE on green acceptance, otherwise REWORK; planner — valid YAML draft. `FORGE_MOCK_SCENARIO=rogue` tests scope control. Tokens counted from message length, cost — from config prices, so reports and caps run for real.
 
 ### Git (§1.4, NFR-5)
-Если target — git-репозиторий: на задачу создаётся ветка `forge/<task-id>`,
-после APPROVE — локальный коммит записанных файлов. `forge accept` мержит ветку
-локально (`--no-ff`). Push отсутствует как класс. Если target не git-репозиторий —
-фаза пропускается с записью в журнал.
+If target is a git repository: branch `forge/<task-id>` per task, local commit of written files after APPROVE. `forge accept` merges branch locally (`--no-ff`). Push is absent as a class. If target is not a git repository — phase is skipped with journal entry.
 
-## Журнал (§5)
+## Journal (§5)
 
-Событие: `{ts, run_id, task_id, phase, role, model, tokens_in, tokens_out,
-cost_usd, command?, exit_code?, note}`. Фазы: `run`, `gate`, `state`, `git`,
-`coder`, `repair`, `validate`, `review`, `plan`, `budget`. Сырые ответы моделей
-(до 2000 символов) — в `note` событий вызова; секреты в журнал не пишутся
-(ключи живут только в `.env` и переменных окружения, NFR-3).
+Event: `{ts, run_id, task_id, phase, role, model, tokens_in, tokens_out, cost_usd, command?, exit_code?, note}`. Phases: `run`, `gate`, `state`, `git`, `coder`, `repair`, `validate`, `review`, `plan`, `budget`. Raw model responses (up to 2000 chars) — in `note` of call events; secrets are not written to journal (keys live only in `.env` and env vars, NFR-3).

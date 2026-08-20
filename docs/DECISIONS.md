@@ -1,116 +1,65 @@
-# DECISIONS — решения и отклонения при сборке agent-forge (сессия 1)
+# DECISIONS — agent-forge build decisions and deviations (session 1)
 
-Все отклонения от SPEC.md v1.0 зафиксированы здесь и в ANALYTICS.md (не молча).
+All deviations from SPEC.md v1.0 are recorded here and in ANALYTICS.md (not silently).
 
-## AF-01. Инструменту `git_commit` у агента нет
+## AF-01. Agent has no `git_commit` tool
 
-**Спека:** §FR-2 перечисляет `git_commit` среди инструментов агента.
-**Конфликт:** `prompts/20_codegen.md` запрещает coder'у коммитить («коммит делает
-agent-forge после гейта reviewer»).
-**Решение:** инструмент агенту не выдаётся (в TOOL_SCHEMAS его нет); локальный
-коммит делает runner после APPROVE reviewer'а. Промпт имеет приоритет — он
-новее по смыслу и безопаснее (коммит после гейта, а не до).
+**Spec:** §FR-2 lists `git_commit` among agent tools.
+**Conflict:** `prompts/20_codegen.md` forbids coder from committing («commit is done by agent-forge after reviewer gate»).
+**Decision:** tool is not given to agent (not in TOOL_SCHEMAS); local commit is done by runner after reviewer APPROVE. Prompt has priority — it is newer in intent and safer (commit after gate, not before).
 
-## AF-02. «Diff» для reviewer — снапшот записанных файлов
+## AF-02. "Diff" for reviewer — snapshot of written files
 
-**Спека:** §FR-3 — «reviewer-роль оценивает diff».
-**Решение v1:** runner отслеживает файлы, записанные через `write_file`, и
-передаёт reviewer'у их содержимое (до 3000 символов на файл) плюс вывод
-acceptance. Настоящий `git diff` невозможен, когда target — не git-репозиторий
-(а v1 обязан работать и в этом случае). Для git-target'а содержимое записанных
-файлов эквивалентно diff'у новых файлов; правки существующих файлов видны без
-старой версии. **Долг v2:** при наличии git — прикладывать `git diff` ветки задачи.
+**Spec:** §FR-3 — "reviewer role evaluates diff".
+**Decision v1:** runner tracks files written via `write_file` and passes their content (up to 3000 chars per file) plus acceptance output to reviewer. True `git diff` is impossible when target is not a git repository (and v1 must work in this case). For git target, content of written files is equivalent to diff of new files; edits to existing files are visible without old version. **Debt v2:** when git is present — attach `git diff` of task branch.
 
-## AF-03. Версия промптов: git-хеш с fallback на sha256
+## AF-03. Prompt version: git hash with sha256 fallback
 
-**Спека:** §FR-7 — «версия промптов (git hash prompts/)».
-**Решение:** если каталог agent-forge — git-репозиторий, берётся
-`git log -1 --format=%H -- prompts/`; иначе — sha256 конкатенации файлов
-`prompts/*.md` (детерминировано, воспроизводимо). Fallback нужен, потому что
-репозиторий собирается до первого коммита, а тесты и Docker должны работать всегда.
+**Spec:** §FR-7 — "prompt version (git hash prompts/)".
+**Decision:** if agent-forge directory is a git repository, use `git log -1 --format=%H -- prompts/`; otherwise — sha256 of concatenated `prompts/*.md` files (deterministic, reproducible). Fallback is needed because repository is assembled before first commit, and tests and Docker must always work.
 
-## AF-04. Состояние repair = повторный `running`
+## AF-04. Repair state = repeated `running`
 
-**Спека:** §FR-4 перечисляет состояния `queued → running → validating → review →
-done | failed | blocked`; отдельного состояния repair нет.
-**Решение:** repair-итерация переводит задачу обратно в `running` с note
-`repair iteration N/3`; число итераций хранится в `tasks/<id>.json`
-(`repair_iterations`) и видно в `forge status`/`report`.
+**Spec:** §FR-4 lists states `queued → running → validating → review → done | failed | blocked`; no separate repair state.
+**Decision:** repair iteration moves task back to `running` with note `repair iteration N/3`; iteration count is stored in `tasks/<id>.json` (`repair_iterations`) and visible in `forge status`/`report`.
 
-## AF-05. Acceptance-команды вне whitelist
+## AF-05. Acceptance commands outside whitelist
 
-**Спека:** §FR-2 — whitelist для `run_command` агента (тесты, линтер, validate_canon).
-**Решение:** whitelist (`python, pytest, npm, npx, node, ruff, mypy`) действует
-только на инструмент агента. Acceptance-команды из tasks.yaml пишет владелец
-(доверенные) — runner исполняет их как есть, с таймаутом 300 c.
+**Spec:** §FR-2 — whitelist for agent's `run_command` (tests, linter, validate_canon).
+**Decision:** whitelist (`python, pytest, npm, npx, node, ruff, mypy`) applies only to agent tool. Acceptance commands from tasks.yaml are written by owner (trusted) — runner executes them as-is, with 300s timeout.
 
-## AF-06. Per-day кап считается по журналам runs/
+## AF-06. Per-day cap is calculated from runs/ journals
 
-**Спека:** §FR-5 — капы per-task / per-run / per-day.
-**Решение:** отдельного леджера нет; per-day — сумма `cost_usd` по всем
-`runs/*/events.jsonl` за сутки UTC. Просто и достаточно для однопользовательского
-инструмента; журналы — единственный источник истины о расходах.
+**Spec:** §FR-5 — caps per-task / per-run / per-day.
+**Decision:** no separate ledger; per-day — sum of `cost_usd` across all `runs/*/events.jsonl` for UTC day. Simple and sufficient for a single-user tool; journals are the single source of truth on costs.
 
-## AF-07. Расположение репозитория
+## AF-07. Repository Location
 
-Инструмент живёт в `big fantasy/agent-forge/` — рядом с целевым монорепо
-(каталоги `canon/`, `tools/`, `docs/design/specs/` доступны как `..`).
-Пакет спецификации (`docs/design/specs/agent-forge/`) остаётся нетронутым.
+Tool lives in `big fantasy/agent-forge/` — next to target monorepo (directories `canon/`, `tools/`, `docs/design/specs/` accessible as `..`). Specification package (`docs/design/specs/agent-forge/`) remains untouched.
 
-## AF-08. Resume рестартует фазу с чистым контекстом (факт пилота)
+## AF-08. Resume restarts phase with clean context (pilot fact)
 
-Убитый по таймауту прогон возобновляется с начала фазы: диалог агента не
-восстанавливается, модель перечитывает файлы и переделывает работу. Цена
-рестарта — 25–50K токенов на вызов. Правило эксплуатации: не убивать прогон
-посреди фазы; длинные прогоны — через `nohup ... &` с опросом журнала.
-**Долг v2:** сохранять историю диалога в `tasks/<id>.json` и восстанавливать.
+Killed by timeout run resumes from phase start: agent dialogue is not restored, model re-reads files and redoes work. Restart cost — 25–50K tokens per call. Operational rule: do not kill run mid-phase; long runs — via `nohup ... &` with journal polling.
+**Debt v2:** save dialogue history in `tasks/<id>.json` and restore.
 
-## AF-09. `node --test <dir>` не работает на рантайме владельца
+## AF-09. `node --test <dir>` does not work on owner runtime
 
-Node 24.15.0 из runtime kimi-desktop: аргумент-каталог падает с
-MODULE_NOT_FOUND (каталог резолвится как entry point). Рабочая форма —
-glob: `node --test "tests/*.test.ts"` (Node сам разворачивает шаблон).
-Вшито в prompts/20_codegen.md (обе копии: репо + мастер-пакет).
+Node 24.15.0 from kimi-desktop runtime: directory argument fails with MODULE_NOT_FOUND (directory resolves as entry point). Working form — glob: `node --test "tests/*.test.ts"` (Node expands glob itself). Hardcoded in prompts/20_codegen.md (both copies: repo + master package).
 
-## AF-10. Запрет `npm install` в промпте недостаточен
+## AF-10. `npm install` prohibition in prompt is insufficient
 
-Coder пилота поставил node_modules (tsx/esbuild) и написал tsx-мост тестов
-вопреки явному запрету в prompts/20 — whitelist `run_command` содержит npm,
-и модель пошла по знакомому пути. Промпт — не граница. **Долг v2:** запрет
-`npm install`/`npx <пакет>` на уровне инструмента (блокировка как
-SCOPE_VIOLATION) либо явное разрешение зависимостей в контракте задачи.
-Правило стека (импорты `.ts`, только стираемый синтаксис) тем не менее
-остаётся в промпте — оно сработало: финальный порт чистый.
+Pilot coder installed node_modules (tsx/esbuild) and wrote tsx test bridge despite explicit ban in prompts/20 — whitelist `run_command` contains npm, and model took familiar path. Prompt is not a boundary. **Debt v2:** ban `npm install`/`npx <package>` at tool level (block as SCOPE_VIOLATION) or explicit dependency allowance in task contract. Stack rule (`.ts` imports, erasable syntax only) nevertheless stayed in prompt — it worked: final port is clean.
 
-## AF-11. v1.1: dotnet в whitelist, ProgramFiles в env дочерних команд
+## AF-11. v1.1: dotnet in whitelist, ProgramFiles in child env
 
-**Факт приёмки atlas (19.08.2026):** задачи модулей продукта требуют
-`dotnet build/test` — добавлен в COMMAND_ALLOWLIST; `npx` из whitelist убран
-(исполняет произвольные пакеты = обход запрета зависимостей). Дочерним
-командам на Windows прокидываются дефолты `ProgramFiles`/`ProgramFiles(x86)`/
-`ProgramW6432`: без них NuGet падает с «Value cannot be null (Parameter
-'path1')» в урезанных окружениях (найдено при приёмке каркаса atlas).
+**Product framework acceptance fact (19.08.2026):** product module tasks require `dotnet build/test` — added to COMMAND_ALLOWLIST; `npx` removed from whitelist (executes arbitrary packages = dependency ban bypass). Child commands on Windows receive `ProgramFiles`/`ProgramFiles(x86)`/`ProgramW6432` defaults: without them NuGet fails with «Value cannot be null (Parameter 'path1')» in stripped environments (found during product framework acceptance).
 
-## AF-12. v1.1: снапшот истории диалога фазы (закрывает долг AF-08)
+## AF-12. v1.1: phase dialogue history snapshot (closes AF-08 debt)
 
-`run_tool_agent` пишет `runs/<run>/tasks/<id>.<phase>.history.json` после
-каждого шага; kill прогона оставляет снапшот, resume продолжает фазу с
-контекстом и сохранённым счётчиком шагов. При штатном завершении фазы (любой
-маркер, включая STEPS_EXHAUSTED) снапшот удаляется — повторный запуск задачи
-начинается с чистого диалога и свежего бюджета шагов. Покрыто
-tests/test_resume_history.py.
+`run_tool_agent` writes `runs/<run>/tasks/<id>.<phase>.history.json` after each step; killed run leaves snapshot, resume continues phase with context and preserved step counter. On normal phase completion (any marker, including STEPS_EXHAUSTED) snapshot is deleted — re-running task starts with clean dialogue and fresh step budget. Covered by tests/test_resume_history.py.
 
-## 20.08.2026 — калибровка по run-20260820-080204 (волны 1–2 atlas-модулей)
+## 20.08.2026 — calibration from run-20260820-080204 (waves 1–2 of product modules)
 
-1. **max_tokens coder/repair 8000 → 32000** (config/models.yaml). Симптом:
-   модульные *.cs (12–14 КБ) обрывались посередине файла, reviewer ловил
-   невалидный diff 3 итерации подряд (mod-world-time → failed). Лимит резал
-   write_file с большим content.
-2. **Acceptance без `--filter "FullyQualifiedName~..."`** (config/tasks.atlas-modules.yaml):
-   фильтр давал «No test matches» при прогоне на уровне solution (проекты без
-   совпадений), ревьюер трактовал как красный гейт. Теперь полный
-   `cd server && dotnet test` — медленнее на секунды, но без ложных отказов.
-3. Гейты сдерживают только state=done — failed-задачи не блокируют волну
-   (by design), поэтому волна 2 стартовала при проваленной волне 1. Лечится
-   перезапуском: done пропускаются, failed переигрываются; ветки forge/<id>
-   пересоздаются через `checkout -B`, чистить вручную не нужно.
+1. **max_tokens coder/repair 8000 → 32000** (config/models.yaml). Symptom: modular *.cs (12–14 KB) were truncated mid-file, reviewer caught invalid diff 3 iterations in a row (mod-world-time → failed). Limit was cutting write_file with large content.
+2. **Acceptance without `--filter "FullyQualifiedName~..."`** (in module task config): filter gave «No test matches» when running at solution level (projects without matches), reviewer treated as red gate. Now full `cd server && dotnet test` — seconds slower, but no false negatives.
+3. Gates hold only state=done — failed tasks do not block wave (by design), so wave 2 started with failed wave 1. Fixed by restart: done are skipped, failed are replayed; forge/<id> branches are recreated via `checkout -B`, no manual cleanup needed.

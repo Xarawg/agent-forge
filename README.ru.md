@@ -3,9 +3,10 @@
 Инфраструктура агентной кодогенерации: владелец запускает локально, инструмент
 разбивает пакет спецификации на задачи и гоняет их через LLM-агентов на
 OpenAI-совместимом API (DeepSeek, бесплатные модели OpenRouter `:free`,
-локальные через Ollama и т.п.). Спецификация инструмента: [docs/SPEC.md](docs/SPEC.md).
+локальные через Ollama и т.п.). Спецификация инструмента: [docs/SPEC.ru.md](docs/SPEC.ru.md) (основная — [docs/SPEC.md](docs/SPEC.md)).
 
 > Каноническое описание — английское [README.md](README.md); этот файл может
+> отставать. Полный справочник по конфигурации: [docs/CONFIGURATION.ru.md](docs/CONFIGURATION.ru.md) (основной — [docs/CONFIGURATION.md](docs/CONFIGURATION.md)).
 > отставать. Полный справочник по конфигурации: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Возможности
@@ -109,7 +110,7 @@ CI: GitHub Actions (`.github/workflows/ci.yml`: ubuntu + windows, Python
 Выбор пресета: `--provider config/providers/openrouter-free.yaml` или
 `FORGE_PROVIDER=...` в `.env`. Переопределения по ролям:
 `FORGE_<ROLE>_BASE_URL / _API_KEY / _MODEL`, общий fallback `FORGE_BASE_URL`.
-Полный справочник — [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+Полный справочник — [docs/CONFIGURATION.ru.md](docs/CONFIGURATION.ru.md) (основной — [docs/CONFIGURATION.md](docs/CONFIGURATION.md)).
 
 ## Структура
 
@@ -119,11 +120,11 @@ prompts/    — библиотека промптов ролей (версион
 config/     — models.yaml, providers/*.yaml, tasks.example.yaml
 runs/       — журналы прогонов (в .gitignore)
 tests/      — pytest, одна команда
-docs/       — SPEC.md, ARCHITECTURE.md, DECISIONS.md, ANALYTICS.md, CONFIGURATION.md
+docs/       — SPEC.md / SPEC.ru.md, ARCHITECTURE.md / ARCHITECTURE.ru.md, DECISIONS.md / DECISIONS.ru.md, ANALYTICS.md / ANALYTICS.ru.md, CONFIGURATION.md / CONFIGURATION.ru.md
 ```
 
-Документация — русская; код и идентификаторы — английские.
+Документация — на двух языках: английский основной, русский дополнительный (*.ru.md); код и идентификаторы — английские.
 
 ## Лицензия
 
-[MIT](LICENSE) © 2026 Atlas project contributors.
+[MIT](LICENSE) © 2026 agent-forge contributors.

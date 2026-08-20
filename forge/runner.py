@@ -227,7 +227,7 @@ class Runner:
         return parse_verdict(text), text
 
     def _written_snapshot(self, toolbox: ToolBox) -> str:
-        """Содержимое записанных файлов как замена diff (v1, см. docs/DECISIONS.md)."""
+        """Содержимое записанных файлов как замена diff (v1, см. docs/DECISIONS.md / docs/DECISIONS.ru.md)."""
         chunks: list[str] = []
         for rel in toolbox.written_files:
             try:

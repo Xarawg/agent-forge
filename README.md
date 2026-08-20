@@ -48,7 +48,7 @@ forge resume <run_id>     # continue the run
 
 ## Configuration
 
-Providers are YAML presets (`config/providers/*.yaml`), models/prices/budgets are in `config/models.yaml`, and everything can be overridden via environment variables (`FORGE_BASE_URL`, `FORGE_API_KEY`, `FORGE_<ROLE>_MODEL`, `FORGE_MOCK`, ...). Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md). The tool specification (FR/NFR) is in [docs/SPEC.md](docs/SPEC.md).
+Providers are YAML presets (`config/providers/*.yaml`), models/prices/budgets are in `config/models.yaml`, and everything can be overridden via environment variables (`FORGE_BASE_URL`, `FORGE_API_KEY`, `FORGE_<ROLE>_MODEL`, `FORGE_MOCK`, ...). Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md) ([русская версия](docs/CONFIGURATION.ru.md)). The tool specification (FR/NFR) is in [docs/SPEC.md](docs/SPEC.md) ([русская версия](docs/SPEC.ru.md)).
 
 ## Web UI
 
@@ -72,4 +72,4 @@ CI: GitHub Actions (`.github/workflows/ci.yml`, ubuntu × windows, Python 3.12/3
 
 ## License
 
-[MIT](LICENSE) © 2026 Atlas project contributors.
+[MIT](LICENSE) © 2026 agent-forge contributors.

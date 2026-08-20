@@ -89,7 +89,8 @@ DENY_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     )
 )
 
-#: Дефолты окружения Windows для дочерних процессов (урок приёмки atlas:
+#: Дефолты окружения Windows для дочерних процессов (выявлено при приёмке
+#: проектов на dotnet: без ProgramFiles NuGet падает с «Value cannot be null (Parameter 'path1')»).
 #: без ProgramFiles NuGet падает с «Value cannot be null (Parameter 'path1')»).
 _WINDOWS_ENV_DEFAULTS = {
     "ProgramFiles": r"C:\Program Files",
