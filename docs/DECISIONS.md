@@ -63,3 +63,8 @@ Pilot coder installed node_modules (tsx/esbuild) and wrote tsx test bridge despi
 1. **max_tokens coder/repair 8000 → 32000** (config/models.yaml). Symptom: modular *.cs (12–14 KB) were truncated mid-file, reviewer caught invalid diff 3 iterations in a row (mod-world-time → failed). Limit was cutting write_file with large content.
 2. **Acceptance without `--filter "FullyQualifiedName~..."`** (in module task config): filter gave «No test matches» when running at solution level (projects without matches), reviewer treated as red gate. Now full `cd server && dotnet test` — seconds slower, but no false negatives.
 3. Gates hold only state=done — failed tasks do not block wave (by design), so wave 2 started with failed wave 1. Fixed by restart: done are skipped, failed are replayed; forge/<id> branches are recreated via `checkout -B`, no manual cleanup needed.
+
+## AF-13. No public cost/quality benchmark
+
+**Context:** competitive analysis (docs/COMPETITIVE_ANALYSIS.md) recommended a public mini-benchmark «model × cost × % done» as evidence base.
+**Decision (owner, 2026-08-20):** rejected. agent-forge is provider-agnostic: the owner's runs go through their provider with their prices, other users bring their own provider keys and models — owner's cost figures do not transfer and would mislead. Cost accounting stays per-user via `config/models.yaml` prices and `forge report`; reproducibility evidence is the on-disk journal format and mock mode, not a published leaderboard.
