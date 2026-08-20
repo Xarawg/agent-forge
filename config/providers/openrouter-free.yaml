@@ -1,0 +1,28 @@
+# Пресет провайдера: OpenRouter, бесплатные модели (суффикс :free).
+# Реально $0. Ключ: openrouter.ai → Keys (регистрация, пополнение не нужно).
+# Цена бесплатности — лимиты: ~50 запросов/день на модель (1000/день при
+# балансе ≥$10 на аккаунте) и ~20 RPM. Runner обязан идти последовательно
+# (SPEC.md §7) и отрабатывать 429 backoff'ом из models.yaml.
+# Доступность конкретных :free моделей меняется — актуальный список:
+# https://openrouter.ai/models?q=free
+
+provider:
+  name: openrouter-free
+  base_url: https://openrouter.ai/api/v1
+  api_key_env: OPENROUTER_API_KEY
+  api_style: openai-compatible
+  limits:
+    rpm: 20
+    requests_per_day: 50             # консервативно; runner ставит задачу в blocked при исчерпании
+
+roles:
+  planner:  { model: deepseek/deepseek-r1:free }
+  coder:    { model: deepseek/deepseek-chat-v3:free }   # если снят с free-раздачи — см. fallback ниже
+  reviewer: { model: deepseek/deepseek-chat-v3:free }
+  repair:   { model: deepseek/deepseek-chat-v3:free }
+
+# Запасные free-модели, если основная недоступна/перегружена (runner перебирает по порядку).
+fallback_models:
+  - deepseek/deepseek-chat-v3.1:free
+  - qwen/qwen3-235b-a22b:free
+  - moonshotai/kimi-k2:free

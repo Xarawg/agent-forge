@@ -1,0 +1,15 @@
+# State and secrets (SPEC.md NFR-3)
+.env
+runs/
+!runs/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

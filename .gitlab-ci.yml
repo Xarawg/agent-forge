@@ -1,0 +1,62 @@
+# CI agent-forge: install → lint → typecheck → test → build (SESSIONS.md, сессия 1).
+stages:
+  - install
+  - lint
+  - typecheck
+  - test
+  - build
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+cache:
+  paths:
+    - .pip-cache
+
+.install: &install |
+  python -m pip install --upgrade pip
+  pip install -e ".[dev]"
+
+install:
+  stage: install
+  image: python:3.12-slim
+  script:
+    - *install
+    - pip check
+
+lint:
+  stage: lint
+  image: python:3.12-slim
+  script:
+    - *install
+    - ruff check forge tests
+
+typecheck:
+  stage: typecheck
+  image: python:3.12-slim
+  script:
+    - *install
+    - mypy forge
+
+test:
+  stage: test
+  image: python:3.12-slim
+  script:
+    - *install
+    - pytest -q
+  environment:
+    name: mock
+  variables:
+    FORGE_MOCK: "1"   # тесты идут без API-ключа (SPEC.md §6.3)
+
+build:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - docker run --rm "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" --help
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG

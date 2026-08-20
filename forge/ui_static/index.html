@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-forge — канбан прогонов</title>
+<style>
+  :root {
+    --bg: #0e1117; --panel: #161b22; --panel2: #1c2330; --border: #2d333b;
+    --text: #d7dde4; --dim: #8b949e; --accent: #58a6ff;
+    --queued: #8b949e; --running: #58a6ff; --validating: #d29922; --review: #bc8cff;
+    --blocked: #f0883e; --failed: #f85149; --done: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 16px; margin: 0; color: var(--accent); }
+  header select, header button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 10px; font-size: 13px; cursor: pointer;
+  }
+  header button.active { border-color: var(--accent); color: var(--accent); }
+  #run-meta { color: var(--dim); font-size: 13px; }
+  #total-cost { color: var(--done); font-weight: 600; }
+  main { padding: 14px 16px; }
+  #board { display: flex; gap: 10px; align-items: flex-start; overflow-x: auto; }
+  .col { min-width: 220px; flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  .col h2 {
+    margin: 0; padding: 8px 10px; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .04em; border-bottom: 1px solid var(--border); color: var(--dim);
+  }
+  .col h2 .count { float: right; }
+  .card {
+    margin: 8px; padding: 8px 10px; background: var(--panel2);
+    border: 1px solid var(--border); border-left: 3px solid var(--queued);
+    border-radius: 6px; cursor: pointer;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .title { font-weight: 600; margin-bottom: 4px; }
+  .card .id { color: var(--dim); font-size: 12px; font-family: Consolas, monospace; }
+  .card .stats { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .card .note { color: var(--dim); font-size: 12px; margin-top: 4px; white-space: pre-wrap; }
+  .card .gate { color: var(--blocked); font-size: 12px; }
+  .card.state-queued { border-left-color: var(--queued); }
+  .card.state-running { border-left-color: var(--running); }
+  .card.state-validating { border-left-color: var(--validating); }
+  .card.state-review { border-left-color: var(--review); }
+  .card.state-blocked { border-left-color: var(--blocked); }
+  .card.state-failed { border-left-color: var(--failed); }
+  .card.state-done { border-left-color: var(--done); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 13px; }
+  th { color: var(--dim); font-size: 12px; text-transform: uppercase; }
+  td.num, th.num { text-align: right; font-family: Consolas, monospace; }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--border); }
+  .badge { padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--panel2); }
+  #panel {
+    position: fixed; top: 0; right: 0; width: 46%; min-width: 420px; height: 100%;
+    background: var(--panel); border-left: 1px solid var(--border);
+    transform: translateX(100%); transition: transform .15s ease-out;
+    display: flex; flex-direction: column; z-index: 10;
+  }
+  #panel.open { transform: translateX(0); }
+  #panel header { position: static; }
+  #panel-title { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #events {
+    flex: 1; overflow: auto; margin: 0; padding: 10px 14px;
+    font: 12px/1.5 Consolas, "Courier New", monospace; white-space: pre-wrap; word-break: break-word;
+  }
+  .ev-note { color: var(--dim); }
+  #empty { color: var(--dim); padding: 30px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>agent-forge</h1>
+  <label>Прогон: <select id="run-select"></select></label>
+  <span id="run-meta"></span>
+  <span>Итого: <span id="total-cost">$0.0000</span></span>
+  <button id="btn-board" class="active">Канбан</button>
+  <button id="btn-report">Отчёт</button>
+</header>
+<main>
+  <div id="board"></div>
+  <div id="report" hidden></div>
+  <div id="empty" hidden>Прогонов пока нет — запустите <code>forge run</code>.</div>
+</main>
+<aside id="panel">
+  <header>
+    <span id="panel-title"></span>
+    <button id="panel-close">✕</button>
+  </header>
+  <pre id="events"></pre>
+</aside>
+<script>
+"use strict";
+// Колонки канбана: реальные состояния runner'а (forge/models.py TASK_STATES).
+const COLUMNS = [
+  ["queued", "Очередь"],
+  ["running", "В работе"],
+  ["validating", "Валидация"],
+  ["review", "Ревью"],
+  ["blocked", "Заблокировано"],
+  ["failed", "Провалено"],
+  ["done", "Готово"],
+];
+const STATE_LABEL = Object.fromEntries(COLUMNS);
+
+let runs = [];
+let currentRun = null;
+let currentDetail = null;
+let openTask = null;
+let view = "board";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const money = (v) => "$" + Number(v || 0).toFixed(4);
+
+async function api(path) {
+  const resp = await fetch(path, {cache: "no-store"});
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  return resp.json();
+}
+
+async function refreshRuns() {
+  try {
+    const data = await api("/api/runs");
+    runs = data.runs || [];
+  } catch (e) { return; }
+  const select = $("run-select");
+  const prev = currentRun;
+  select.innerHTML = runs.map((r) =>
+    `<option value="${esc(r.run_id)}">${esc(r.run_id)} — ${esc(r.package || "?")}</option>`).join("");
+  if (runs.length === 0) {
+    currentRun = null;
+    currentDetail = null;
+    renderAll();
+    return;
+  }
+  currentRun = runs.some((r) => r.run_id === prev) ? prev : runs[runs.length - 1].run_id;
+  select.value = currentRun;
+  await refreshDetail();
+}
+
+async function refreshDetail() {
+  if (!currentRun) return;
+  try {
+    currentDetail = await api("/api/run/" + encodeURIComponent(currentRun));
+  } catch (e) { return; }
+  renderAll();
+  if (openTask) await refreshEvents();
+}
+
+async function refreshEvents() {
+  if (!currentRun || !openTask) return;
+  try {
+    const data = await api("/api/run/" + encodeURIComponent(currentRun) +
+      "/events?task=" + encodeURIComponent(openTask) + "&tail=50");
+    renderEvents(data.events || []);
+  } catch (e) { /* прогон мог исчезнуть — панель просто не обновится */ }
+}
+
+function renderAll() {
+  const meta = $("run-meta");
+  if (!currentDetail) {
+    meta.textContent = "";
+    $("total-cost").textContent = money(0);
+    $("empty").hidden = runs.length !== 0;
+    $("board").innerHTML = "";
+    $("report").innerHTML = "";
+    return;
+  }
+  $("empty").hidden = true;
+  const r = currentDetail.run || {};
+  const t = currentDetail.totals || {};
+  meta.textContent = (r.provider || "?") + (r.mock ? " · mock" : "") +
+    (r.started_at ? " · " + r.started_at : "");
+  $("total-cost").textContent = money(t.cost_usd);
+  if (view === "board") renderBoard();
+  else renderReport();
+}
+
+function renderBoard() {
+  const tasks = currentDetail.tasks || [];
+  const byState = {};
+  for (const t of tasks) (byState[t.state] = byState[t.state] || []).push(t);
+  const known = COLUMNS.map(([s]) => s);
+  const extra = Object.keys(byState).filter((s) => !known.includes(s));
+  const columns = COLUMNS.concat(extra.map((s) => [s, s]));
+  $("board").innerHTML = columns.map(([state, label]) => {
+    const cards = (byState[state] || []).map((t) => `
+      <div class="card state-${esc(t.state)}" data-task="${esc(t.id)}">
+        <div class="title">${esc(t.title)}</div>
+        <div class="id">${esc(t.id)}${t.gate ? ' <span class="gate">⛳ ' + esc(t.gate) + "</span>" : ""}</div>
+        <div class="stats">${money(t.cost_usd)} · токены ${t.tokens_in}+${t.tokens_out} · repair: ${t.repairs}</div>
+        ${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}
+      </div>`).join("");
+    return `<section class="col"><h2>${esc(label)}<span class="count">${(byState[state] || []).length}</span></h2>${cards}</section>`;
+  }).join("");
+  for (const card of document.querySelectorAll(".card")) {
+    card.addEventListener("click", () => openPanel(card.dataset.task));
+  }
+}
+
+function renderReport() {
+  const tasks = currentDetail.tasks || [];
+  const t = currentDetail.totals || {};
+  const rows = tasks.map((x) => `<tr>
+    <td>${esc(x.id)}</td><td>${esc(x.title)}</td>
+    <td><span class="badge">${esc(STATE_LABEL[x.state] || x.state)}</span></td>
+    <td class="num">${x.tokens_in}+${x.tokens_out}</td>
+    <td class="num">${money(x.cost_usd)}</td>
+    <td class="num">${x.repairs}</td>
+    <td>${esc(x.note || "")}</td></tr>`).join("");
+  $("report").innerHTML = `<table>
+    <thead><tr><th>ID</th><th>Задача</th><th>Состояние</th><th class="num">Токены</th>
+    <th class="num">Стоимость</th><th class="num">Repair</th><th>Заметка</th></tr></thead>
+    <tbody>${rows}
+    <tr class="total"><td colspan="3">Итого</td>
+      <td class="num">${t.tokens_in}+${t.tokens_out}</td>
+      <td class="num">${money(t.cost_usd)}</td>
+      <td class="num">${t.repairs}</td><td></td></tr>
+    </tbody></table>`;
+}
+
+function fmtEvent(e) {
+  let line = `[${e.ts || "?"}] ${e.phase || "?"}`;
+  if (e.role) line += "/" + e.role;
+  if (e.command) line += " $ " + String(e.command).slice(0, 200);
+  if (e.exit_code !== null && e.exit_code !== undefined) line += ` (exit=${e.exit_code})`;
+  if (e.tokens_in || e.tokens_out) line += ` tok=${e.tokens_in}+${e.tokens_out} ${money(e.cost_usd)}`;
+  return esc(line) + (e.note ? `\n<span class="ev-note">    ${esc(e.note)}</span>` : "");
+}
+
+function renderEvents(events) {
+  const el = $("events");
+  el.innerHTML = events.map(fmtEvent).join("\n") || "(событий нет)";
+  el.scrollTop = el.scrollHeight;
+}
+
+function openPanel(taskId) {
+  openTask = taskId;
+  const task = (currentDetail.tasks || []).find((t) => t.id === taskId);
+  $("panel-title").textContent = task ? `${task.title} (${task.id})` : taskId;
+  $("panel").classList.add("open");
+  refreshEvents();
+}
+
+$("panel-close").addEventListener("click", () => {
+  openTask = null;
+  $("panel").classList.remove("open");
+});
+$("run-select").addEventListener("change", (e) => {
+  currentRun = e.target.value;
+  openTask = null;
+  $("panel").classList.remove("open");
+  refreshDetail();
+});
+$("btn-board").addEventListener("click", () => {
+  view = "board";
+  $("btn-board").classList.add("active");
+  $("btn-report").classList.remove("active");
+  $("board").hidden = false;
+  $("report").hidden = true;
+  renderAll();
+});
+$("btn-report").addEventListener("click", () => {
+  view = "report";
+  $("btn-report").classList.add("active");
+  $("btn-board").classList.remove("active");
+  $("board").hidden = true;
+  $("report").hidden = false;
+  renderAll();
+});
+
+refreshRuns();
+setInterval(refreshRuns, 3000); // автообновление без перезагрузки страницы
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Пресет провайдера: DeepSeek direct (дефолт, SPEC.md §FR-6).
+# Платно, но очень дёшево: пилотная задача обычно укладывается в $0.05–0.30.
+# Ключ: platform.deepseek.com → API keys. Пополнение от $2.
+# ВНИМАНИЕ: это НЕ бесплатный провайдер. Бесплатный путь — openrouter-free.yaml.
+
+provider:
+  name: deepseek
+  base_url: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY      # в .env; runner читает через FORGE_* fallback (SPEC.md §FR-6)
+  api_style: openai-compatible       # /chat/completions
+  limits:
+    rpm: null                        # жёсткого RPM нет; есть очередь при перегрузке — retry по models.yaml
+
+roles:                               # переопределение моделей ролей под этого провайдера
+  planner:  { model: deepseek-reasoner }
+  coder:    { model: deepseek-chat }
+  reviewer: { model: deepseek-chat }
+  repair:   { model: deepseek-chat }

@@ -1,0 +1,25 @@
+# Пресет провайдера: provod.ai — российский OpenAI-совместимый гейт
+# (агрегатор западных и китайских моделей, оплата в рублях, доступен из РФ
+# в отличие от OpenRouter). Ключ: личный кабинет provod.ai.
+# Цены — USD/1M токенов с https://api.provod.ai/v1/models (19.08.2026),
+# продублированы в config/models.yaml для честного forge report.
+
+provider:
+  name: provod
+  base_url: https://api.provod.ai/v1
+  api_key_env: PROVOD_API_KEY        # или общий fallback FORGE_API_KEY
+  api_style: openai-compatible
+  limits:
+    rpm: null
+    daily_budget_rub: 500            # лимит ключа владельца; runner упирается в per_day_max_cost_usd
+
+roles:
+  planner:  { model: deepseek-v4-pro }    # $0.435/$0.87 за 1M in/out
+  coder:    { model: deepseek-v4-pro }
+  reviewer: { model: deepseek-v4-flash }  # $0.14/$0.28 — чек-листовая роль
+  repair:   { model: deepseek-v4-pro }
+
+fallback_models:
+  - deepseek-v4-flash
+  - kimi-k2.7-code
+  - glm-5

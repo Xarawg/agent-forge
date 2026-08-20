@@ -1,0 +1,19 @@
+# Удобная обвязка поверх Dockerfile. Запуск:
+#   docker compose run --rm forge run --tasks config/tasks.example.yaml --target /target
+#   docker compose run --rm forge report
+#   docker compose run --rm test        — прогон тестов внутри образа
+services:
+  forge:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./runs:/app/runs           # журналы прогонов сохраняются на хосте
+      - ${FORGE_TARGET_REPO:-..}:/target   # целевое монорепо продукта
+    # Без daemon'ов (SPEC.md NFR-2): одна команда = один прогон = один контейнер.
+
+  test:
+    build: .
+    entrypoint: ["python", "-m", "pytest", "-q"]
+    environment:
+      FORGE_MOCK: "1"

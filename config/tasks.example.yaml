@@ -1,0 +1,54 @@
+# Образец очереди задач agent-forge (SPEC.md §FR-1, модель данных §5).
+# Поля задачи:
+#   id           — уникальный, kebab-case
+#   title        — короткое имя для forge status
+#   spec_ref     — путь к спеке + якорь раздела (источник истины)
+#   scope_paths  — куда coder МОЖЕТ писать (write_file вне scope блокируется, §FR-2)
+#   depends_on   — DAG зависимостей (пусто = можно сразу)
+#   acceptance   — команды гейта №2 (§FR-3); все должны завершиться кодом 0
+#   budget       — перезадачные капы (иначе дефолты из models.yaml)
+#   gate         — метка милстоуна; после задачи с gate runner стопорится
+#                  до явного `forge accept <id>` (человеческий гейт №3)
+
+package: agent-forge-pilot
+canon_snapshot: canon/decisions.json   # runner прикладывает выдержку к промпту задачи
+
+tasks:
+  - id: pilot-1-port-validate-canon
+    title: "Порт tools/validate_canon.py на TypeScript"
+    spec_ref: "SPEC.md §6.1"
+    scope_paths:
+      - "tools-ts/validate-canon/**"
+    depends_on: []
+    acceptance:
+      - "cd tools-ts/validate-canon && npm test"
+      - "node tools-ts/validate-canon/dist/cli.js canon/ --expect-clean"
+    budget:
+      max_tokens: 150000
+      max_cost_usd: 0.50
+    gate: pilot-1
+
+  - id: skeleton-1-repo-scaffold
+    title: "Каркас монорепо продукта: package.json, tsconfig, eslint, CI"
+    spec_ref: "SPEC.md §3 FR-2 (образец контракта задачи каркаса)"
+    scope_paths:
+      - "package.json"
+      - "tsconfig*.json"
+      - ".eslintrc*"
+      - ".gitlab-ci.yml"
+      - "scripts/**"
+    depends_on: []
+    acceptance:
+      - "npm ci && npm run lint && npm run build"
+
+  - id: skeleton-2-ci-validate-canon
+    title: "Включить validate_canon в CI продуктового репо (D-J04/D-R10)"
+    spec_ref: "SPEC.md §6.2 + canon/schema/* (валидируемый контракт)"
+    scope_paths:
+      - ".gitlab-ci.yml"
+      - "tools/validate_canon.py"
+      - "tools/README.md"
+    depends_on:
+      - skeleton-1-repo-scaffold
+    acceptance:
+      - "python tools/validate_canon.py"

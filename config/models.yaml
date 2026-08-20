@@ -1,0 +1,47 @@
+# Модельная карта ролей agent-forge (SPEC.md §2).
+# Смена модели = правка этого файла, не кода.
+# Цены — USD за 1M токенов, по состоянию на 19.08.2026; ПЕРЕД прогоном сверять
+# с прайсом провайдера (forge report считает стоимость отсюда).
+# Актуальный провайдер: provod.ai (FORGE_PROVIDER=config/providers/provod.yaml).
+# Поле model здесь — дефолт, если пресет провайдера не переопределяет роль.
+
+roles:
+  planner:
+    model: deepseek-v4-pro
+    max_tokens: 16000
+    temperature: 0.2
+    price_per_m_in: 0.435
+    price_per_m_out: 0.87
+
+  coder:
+    model: deepseek-v4-pro
+    max_tokens: 32000   # 20.08: 8000 обрывало write_file больших *.cs посередине (run-20260820-080204)
+    temperature: 0.0
+    price_per_m_in: 0.435
+    price_per_m_out: 0.87
+
+  reviewer:
+    model: deepseek-v4-flash
+    max_tokens: 4000
+    temperature: 0.0
+    price_per_m_in: 0.14
+    price_per_m_out: 0.28
+
+  repair:
+    model: deepseek-v4-pro
+    max_tokens: 32000   # 20.08: как у coder — repair переписывает те же файлы
+    temperature: 0.0
+    price_per_m_in: 0.435
+    price_per_m_out: 0.87
+
+# Бюджетные капы по умолчанию (SPEC.md §FR-5); задача может переопределить свои.
+budgets:
+  per_task_max_tokens: 2000000  # калибровка пилотом: рестарт фазы при kill/resume перечитывает контекст; кап нужен от зацикливания, не от честной работы
+  per_run_max_cost_usd: 2.00    # калибровка пилотом (run-20260819-110410): 0.50 резало прогон на финише
+  per_day_max_cost_usd: 5.00
+  repair_max_iterations: 3
+
+# Поведение при отказах провайдера.
+retry:
+  max_attempts: 5
+  backoff_seconds: [5, 15, 45, 120, 300]   # экспоненциальный backoff; free-лимиты RPM сюда же

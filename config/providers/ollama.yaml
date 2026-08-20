@@ -1,0 +1,20 @@
+# Пресет провайдера: локальные модели через Ollama (или любой
+# OpenAI-совместимый локальный endpoint — LM Studio, vLLM).
+# Полностью бесплатно и оффлайн, но качество кодогенерации на локальных
+# моделях заметно ниже DeepSeek — годится для отладки runner'а и repair-цикла,
+# не для продакшн-генерации.
+# Установка: https://ollama.com → `ollama pull qwen3-coder:30b` (пример).
+
+provider:
+  name: ollama
+  base_url: http://localhost:11434/v1
+  api_key_env: null                  # ключ не нужен; runner не должен требовать .env для этого пресета
+  api_style: openai-compatible
+  limits:
+    rpm: null                        # упор в железо; параллелизм запрещён (SPEC.md §7)
+
+roles:
+  planner:  { model: qwen3:32b }
+  coder:    { model: qwen3-coder:30b }
+  reviewer: { model: qwen3:32b }
+  repair:   { model: qwen3-coder:30b }
