@@ -5,10 +5,11 @@ from pathlib import Path
 import pytest
 import yaml
 
+from forge.lint import test_scope_warnings as scope_warnings
 from forge.llm import MockClient
 from forge.models import load_tasks
 from forge.profiles import get_profile
-from forge.wizard import OUT_NAME, _normalize, _test_scope_warnings, run_wizard
+from forge.wizard import OUT_NAME, _normalize, run_wizard
 
 
 def test_wizard_writes_valid_draft(cfg, target: Path) -> None:
@@ -62,9 +63,9 @@ def test_normalize_warns_on_empty_acceptance_without_scan() -> None:
 
 def test_test_scope_warnings() -> None:
     tasks = [{"id": "t1", "scope_paths": ["src/**", "tests/**"]}]
-    warnings = _test_scope_warnings(tasks)
+    warnings = scope_warnings(tasks)
     assert warnings and "заморозка acceptance" in warnings[0]
-    assert _test_scope_warnings([{"id": "t2", "scope_paths": ["src/**"]}]) == []
+    assert scope_warnings([{"id": "t2", "scope_paths": ["src/**"]}]) == []
 
 
 def test_wizard_survives_non_yaml_planner_reply(cfg, target: Path, monkeypatch) -> None:
@@ -88,3 +89,25 @@ def test_wizard_draft_parses_with_yaml_directly(cfg, target: Path) -> None:
     run_wizard(cfg, MockClient(cfg), target, "задача", check=False)
     raw = yaml.safe_load((target / OUT_NAME).read_text(encoding="utf-8"))
     assert raw["package"] == "wizard-draft" and raw["tasks"]
+
+
+# --- интервью: QUESTIONS-протокол planner'а (onboarding ob2) ------------------
+
+
+def test_wizard_interview_asks_and_continues(cfg, target: Path, monkeypatch) -> None:
+    monkeypatch.setenv("FORGE_MOCK_SCENARIO", "ambiguous")
+    asked: list[str] = []
+    out = run_wizard(cfg, MockClient(cfg), target, "сделай что-нибудь",
+                     check=False, ask=lambda q: asked.append(q) or "модуль auth")
+    assert len(asked) == 2  # mock-planner спросил два вопроса
+    assert "Planner уточняет" in out
+    package = load_tasks(target / OUT_NAME)
+    assert package.tasks  # после ответов черновик собран
+
+
+def test_wizard_interview_noninteractive_warns(cfg, target: Path, monkeypatch) -> None:
+    monkeypatch.setenv("FORGE_MOCK_SCENARIO", "ambiguous")
+    out = run_wizard(cfg, MockClient(cfg), target, "сделай что-нибудь",
+                     check=False, ask=None)
+    assert "неинтерактивный режим" in out
+    assert (target / OUT_NAME).exists()

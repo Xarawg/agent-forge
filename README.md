@@ -46,6 +46,12 @@ forge report --plain   # human-readable summary: done / failed / what next
 forge log <task-id>
 ```
 
+Handy extras: `forge run --dry-run` (cost forecast without starting),
+`forge lint <tasks.yaml>` (contract + frozen-acceptance advice),
+`forge wizard --recipe feature` (ready-made recipes from `config/recipes/`,
+no LLM call), and `forge ui` → `/wizard?file=<draft>` (edit the draft as
+task cards in the browser).
+
 For a real run, copy `.env.example` to `.env` and add a provider key (e.g. `DEEPSEEK_API_KEY`), then drop `FORGE_MOCK`:
 
 ```bash

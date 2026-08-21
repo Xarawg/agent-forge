@@ -1,0 +1,20 @@
+# Рецепт «синхронизировать документацию с кодом»: одна безопасная задача.
+name: docs-sync
+title: "Синхронизировать документацию с кодом"
+description: "Coder сверяет docs/ с кодом и обновляет устаревшие разделы."
+questions:
+  - key: docs_dir
+    ask: "Каталог документации"
+    default: "docs"
+  - key: check_command
+    ask: "Команда проверки (линт/сборка доков или просто перечисление файлов)"
+    default: "python -c \"from pathlib import Path; assert any(Path('docs').glob('*.md'))\""
+tasks:
+  - id: recipe-docs-sync
+    title: "Актуализировать {docs_dir}/ по текущему коду"
+    spec_ref: "рецепт docs-sync"
+    scope_paths:
+      - "{docs_dir}/**"
+    depends_on: []
+    acceptance:
+      - "{check_command}"

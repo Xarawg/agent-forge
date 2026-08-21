@@ -86,9 +86,19 @@ forge report --plain   # итог простым языком: сделано / 
 
 Профили капов: `careful` (задача ≤ $0.30, гейт после каждой задачи — для первых
 прогонов и free-моделей), `normal` (дефолты models.yaml), `fast` (крупные
-задачи, редкие гейты). Оставшееся из онбординг-плана (UI-форма черновика,
-интервью planner'а, галерея рецептов, `--dry-run`) — очередь
-`config/tasks.onboarding.yaml`.
+задачи, редкие гейты).
+
+Дополнительно:
+
+```bash
+forge run --tasks tasks.yaml --dry-run   # прогноз стоимости очереди БЕЗ запуска
+forge lint tasks.yaml                    # контракт + заморозка acceptance (советчик)
+forge wizard --recipe feature --target . # рецепт из config/recipes/ без LLM ($0)
+forge ui                                 # /wizard?file=<черновик> — форма правки карточками
+```
+
+Planner в wizard может задать уточняющие вопросы (протокол QUESTIONS в
+`prompts/10_planner.md`) — отвечайте интерактивно или `--yes` для дефолтов.
 
 ## Запуск в Docker
 

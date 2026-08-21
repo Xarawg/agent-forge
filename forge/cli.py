@@ -8,14 +8,16 @@ from pathlib import Path
 
 from .agents import log_model_call
 from .config import ForgeConfig, forge_root, load_config
+from .dryrun import dry_run_report
 from .init import init_project
 from .journal import Journal, new_run_id
+from .lint import lint_tasks, render_lint
 from .llm import make_client
 from .prompts import load_prompt
 from .report import build_report, latest_run_id, render_plain, render_report, render_status
 from .runner import Runner
 from .ui import serve
-from .wizard import run_wizard
+from .wizard import run_recipe, run_wizard
 
 
 def _resolve_run_id(cfg: ForgeConfig, run_id: str | None) -> str:
@@ -32,6 +34,9 @@ def _make_runner(cfg: ForgeConfig, target: str | None) -> Runner:
 
 def cmd_run(args: argparse.Namespace) -> int:
     cfg = load_config(provider_path=Path(args.provider) if args.provider else None)
+    if args.dry_run:
+        print(dry_run_report(Path(args.tasks), cfg.runs_dir, cfg.budgets.per_run_max_cost_usd))
+        return 0
     runner = _make_runner(cfg, args.target)
     run_id = runner.run(
         Path(args.tasks),
@@ -109,21 +114,38 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_wizard(args: argparse.Namespace) -> int:
-    """Промпт человеческим языком → черновик задач/проверок/бюджетов."""
+    """Промпт человеческим языком или рецепт → черновик задач/проверок/бюджетов."""
     cfg = load_config(provider_path=Path(args.provider) if args.provider else None)
+    target = Path(args.target).resolve() if args.target else Path.cwd()
+    ask = None if args.yes else input
+    if args.recipe:
+        print(run_recipe(
+            cfg, target, args.recipe,
+            profile_name=args.profile,
+            out=Path(args.out) if args.out else None,
+            force=args.force, ask=ask,
+        ))
+        return 0
     intent = args.prompt
     if args.prompt_file:
         intent = Path(args.prompt_file).read_text(encoding="utf-8")
     if not intent:
-        raise SystemExit("wizard: нужен --prompt или --prompt-file")
-    target = Path(args.target).resolve() if args.target else Path.cwd()
+        raise SystemExit("wizard: нужен --prompt, --prompt-file или --recipe")
     print(run_wizard(
         cfg, make_client(cfg), target, intent,
         profile_name=args.profile,
         out=Path(args.out) if args.out else None,
-        force=args.force, check=not args.no_check,
+        force=args.force, check=not args.no_check, ask=ask,
     ))
     return 0
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    """Проверка очереди до запуска: контракт + заморозка acceptance (советчик)."""
+    path = Path(args.tasks)
+    errors, warnings = lint_tasks(path)
+    print(render_lint(path, errors, warnings))
+    return 1 if errors else 0
 
 
 def cmd_accept(args: argparse.Namespace) -> int:
@@ -187,6 +209,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="запустить прогон по tasks.yaml")
     p_run.add_argument("--tasks", required=True, help="путь к tasks.yaml")
     p_run.add_argument("--spec", help="путь к SPEC.md пакета (выдержка в промпт)")
+    p_run.add_argument("--dry-run", action="store_true",
+                       help="прогноз стоимости очереди без запуска (ничего не выполняется)")
     add_common(p_run)
     p_run.set_defaults(func=cmd_run)
 
@@ -221,6 +245,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_wizard = sub.add_parser("wizard", help="черновик настроек из промпта: задачи, проверки, бюджеты")
     p_wizard.add_argument("--prompt", help="что нужно сделать, своими словами")
     p_wizard.add_argument("--prompt-file", help="файл с описанием задачи вместо --prompt")
+    p_wizard.add_argument("--recipe", help="готовый рецепт из config/recipes/ без вызова LLM ($0)")
+    p_wizard.add_argument("--yes", action="store_true",
+                          help="неинтерактивно: дефолтные ответы на вопросы, без interview")
     p_wizard.add_argument("--target", help="корень целевого проекта (по умолчанию — текущий каталог)")
     p_wizard.add_argument("--profile", default="careful",
                           choices=["careful", "normal", "fast"], help="профиль капов (по умолчанию careful)")
@@ -229,6 +256,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_wizard.add_argument("--no-check", action="store_true", help="не прогонять baseline-проверки")
     p_wizard.add_argument("--provider")
     p_wizard.set_defaults(func=cmd_wizard)
+
+    p_lint = sub.add_parser("lint", help="проверить очередь до запуска (контракт, заморозка acceptance)")
+    p_lint.add_argument("tasks", help="путь к tasks.yaml")
+    p_lint.set_defaults(func=cmd_lint)
 
     p_accept = sub.add_parser("accept", help="человеческий гейт №3: принять задачу (merge ветки)")
     p_accept.add_argument("task_id")

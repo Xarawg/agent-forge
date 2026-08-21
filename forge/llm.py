@@ -194,6 +194,14 @@ class MockClient:
     # --- роли ----------------------------------------------------------------
 
     def _planner(self, messages: list[dict[str, Any]]) -> ChatResult:
+        # Сценарий ambiguous (интервью wizard, tasks.onboarding ob2): planner
+        # задаёт вопросы, пока пользователь не ответил (секция «Ответы пользователя»).
+        last = str(messages[-1].get("content") or "")
+        if self.scenario == "ambiguous" and "Ответы пользователя" not in last:
+            return ChatResult(
+                content="QUESTIONS:\n1. Какой модуль правим?\n2. Нужны ли новые тесты?",
+                tokens_out=25,
+            )
         return ChatResult(content=MOCK_TASKS_DRAFT, tokens_out=120)
 
     def _reviewer(self, messages: list[dict[str, Any]]) -> ChatResult:

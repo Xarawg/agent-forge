@@ -4,15 +4,21 @@
 # scope coder'а; профиль по умолчанию — careful).
 # Целевой репозиторий: сам agent-forge (`--target .`).
 #
-# УЖЕ РЕАЛИЗОВАНО ВРУЧНУЮ (2026-08-21, не входит в очередь):
+# РЕАЛИЗОВАНО ВРУЧНУЮ (2026-08-21):
 #   forge/detect.py   — сканер стека (python/node/dotnet/go/rust, CI-команды) + baseline-прогон
 #   forge/profiles.py — профили careful/normal/fast (капы, гейты, подсказки)
 #   forge/init.py     — forge init: git, skeleton tasks.yaml, проверка .env/ключей, baseline
-#   forge/wizard.py   — forge wizard: промпт → planner → tasks.wizard.yaml + прогноз стоимости
+#   forge/wizard.py   — forge wizard: промпт → интервью (QUESTIONS) → tasks.wizard.yaml + прогноз
+#   forge/wizard.py   — forge wizard --recipe: рецепты config/recipes/*.yaml без LLM ($0)
+#   forge/lint.py     — forge lint: контракт + заморозка acceptance (советчик)
+#   forge/dryrun.py   — forge run --dry-run: прогноз стоимости (капы + медиана истории)
+#   forge/ui.py       — /wizard: UI-форма черновика (карточки, правка, atomic save)
 #   report --plain    — отчёт простым языком (сделано/не получилось/что дальше)
-# Эта очередь — то, что осталось: UI-форма, интервью, галерея рецептов, dry-run.
+# Очередь ниже закрыта целиком; файл оставлен как журнал спецификации.
+# Следующий шаг онбординга (не здесь): волны v2/v3 по tasks.v2.yaml/tasks.v3.yaml.
 
 package: agent-forge-onboarding
+status: done (2026-08-21, реализовано вручную, 81 тест зелёный)
 
 tasks:
   # ---------- Волна 1: dry-run и интервью ----------

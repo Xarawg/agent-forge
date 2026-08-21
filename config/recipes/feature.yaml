@@ -1,0 +1,34 @@
+# Рецепт «фича + тесты»: две задачи — код, затем тесты (тесты после кода, prompts/10 п.5).
+name: feature
+title: "Добавить фичу с тестами"
+description: "Coder реализует фичу, затем отдельной задачей пишет тесты; acceptance заморожен."
+questions:
+  - key: feature
+    ask: "Что за фича (одной фразой)"
+  - key: src_dir
+    ask: "Куда писать код (например src)"
+    default: "src"
+  - key: test_dir
+    ask: "Каталог для тестов"
+    default: "tests"
+  - key: test_command
+    ask: "Команда прогона тестов"
+    default: "python -m pytest -q"
+tasks:
+  - id: recipe-feature-impl
+    title: "Реализация: {feature}"
+    spec_ref: "рецепт feature"
+    scope_paths:
+      - "{src_dir}/**"
+    depends_on: []
+    acceptance:
+      - "{test_command}"
+  - id: recipe-feature-tests
+    title: "Тесты на: {feature}"
+    spec_ref: "рецепт feature"
+    scope_paths:
+      - "{test_dir}/**"
+    depends_on:
+      - recipe-feature-impl
+    acceptance:
+      - "{test_command}"

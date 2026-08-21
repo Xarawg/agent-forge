@@ -1,0 +1,23 @@
+# Рецепт «покрыть модуль тестами»: параметры подставляются в {плейсхолдеры}.
+# Рендер детерминированный, без вызова LLM ($0) — forge wizard --recipe test-coverage.
+name: test-coverage
+title: "Покрыть модуль тестами"
+description: "Coder пишет тесты на существующий модуль; acceptance — прогон этих тестов."
+questions:
+  - key: module
+    ask: "Путь к модулю, который покрываем (например src/auth)"
+  - key: test_dir
+    ask: "Каталог для новых тестов"
+    default: "tests"
+  - key: test_command
+    ask: "Команда прогона тестов"
+    default: "python -m pytest -q"
+tasks:
+  - id: recipe-cover-tests
+    title: "Тесты для модуля {module}"
+    spec_ref: "рецепт test-coverage"
+    scope_paths:
+      - "{test_dir}/**"
+    depends_on: []
+    acceptance:
+      - "{test_command}"

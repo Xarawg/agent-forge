@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -17,16 +18,13 @@ from .agents import log_model_call
 from .config import ForgeConfig
 from .detect import render_baseline, render_scan, run_baseline, scan_repo
 from .journal import Journal, new_run_id
+from .lint import test_scope_warnings
 from .llm import LLMClient
 from .models import load_tasks
 from .profiles import DEFAULT_PROFILE, Profile, get_profile
 from .prompts import load_prompt
 
 OUT_NAME = "tasks.wizard.yaml"
-
-#: Признаки тестовых путей в scope — acceptance должен быть заморожен вне scope
-#: coder'а, иначе гейт №2 превращается в самопроверку (железное правило №1).
-_TEST_MARKERS = ("test", "tests", "spec", "e2e")
 
 
 def _scan_summary(scan_root: Path) -> tuple[str, str]:
@@ -53,23 +51,6 @@ def _planner_prompt(intent: str, scan_summary: str) -> list[dict[str, str]]:
             f"## Скан репозитория\n{scan_summary}"
         )},
     ]
-
-
-def _test_scope_warnings(tasks: list[dict[str, Any]]) -> list[str]:
-    """Предупреждения: scope задачи покрывает тесты — coder сможет править гейт."""
-    warnings: list[str] = []
-    for task in tasks:
-        if not isinstance(task, dict):
-            continue
-        tid = str(task.get("id", "?"))
-        for pattern in task.get("scope_paths") or []:
-            segments = {seg.lower() for seg in str(pattern).replace("\\", "/").split("/")}
-            if segments & set(_TEST_MARKERS):
-                warnings.append(
-                    f"⚠ {tid}: scope {pattern!r} включает тесты — coder сможет подправить "
-                    "проверку под себя. Вынесите тесты из scope (заморозка acceptance)."
-                )
-    return warnings
 
 
 def _normalize(
@@ -103,7 +84,7 @@ def _normalize(
         if profile.gate_every_task and not task.get("gate"):
             task["gate"] = "review"
         tasks.append(task)
-    warnings.extend(_test_scope_warnings(tasks))
+    warnings.extend(test_scope_warnings(tasks))
     return tasks, warnings
 
 
@@ -116,9 +97,71 @@ def _forecast(tasks: list[dict[str, Any]]) -> float:
     return round(total, 2)
 
 
+MAX_INTERVIEW_ROUNDS = 2  # защита от бесконечных уточнений: дальше — черновик как есть
+
+
+def _parse_questions(content: str) -> list[str]:
+    """QUESTIONS-протокол planner'а (prompts/10): вопросы вместо черновика."""
+    if not content.strip().startswith("QUESTIONS"):
+        return []
+    questions: list[str] = []
+    for line in content.splitlines()[1:]:
+        line = line.strip()
+        if line and (line[0].isdigit() or line.startswith("-")):
+            questions.append(line.lstrip("0123456789.-) ").strip())
+    return questions
+
+
+def _interview(
+    cfg: ForgeConfig, client: LLMClient, journal: Journal, system: str,
+    intent: str, scan_summary: str,
+    ask: Callable[[str], str] | None,
+    lines: list[str],
+) -> str:
+    """Цикл «planner ↔ вопросы пользователю» до YAML-черновика.
+
+    ask=None (неинтерактивный режим): вопросы выводятся в отчёт, черновик
+    запрашивается без ответов — с явным предупреждением.
+    """
+    messages = [
+        {"role": "system", "content": system},
+        *_planner_prompt(intent, scan_summary),
+    ]
+    for round_no in range(MAX_INTERVIEW_ROUNDS + 1):
+        result = client.chat("planner", messages)
+        log_model_call(journal, cfg, None, "plan", "planner", result)
+        questions = _parse_questions(result.content)
+        if not questions:
+            return result.content
+        if round_no >= MAX_INTERVIEW_ROUNDS or ask is None:
+            lines.append("")
+            lines.append("Planner запросил уточнения" +
+                         (" (неинтерактивный режим — черновик без ответов):" if ask is None
+                          else " (лимит раундов):"))
+            lines.extend(f"  ? {q}" for q in questions)
+            messages.append({"role": "assistant", "content": result.content})
+            messages.append({"role": "user", "content": (
+                "## Ответы пользователя\n(не получены — собери черновик "
+                "с наиболее безопасными допущениями и пометь их в title)"
+            )})
+            continue
+        answers: list[str] = []
+        lines.append("")
+        lines.append("Planner уточняет перед черновиком:")
+        for question in questions:
+            answer = ask(question)
+            lines.append(f"  ? {question} → {answer}")
+            answers.append(f"{question} — {answer}")
+        messages.append({"role": "assistant", "content": result.content})
+        messages.append({"role": "user", "content":
+                         "## Ответы пользователя\n" + "\n".join(answers)})
+    return result.content  # недостижимо: цикл возвращает на не-QUESTIONS ответе
+
+
 def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str,
                profile_name: str = DEFAULT_PROFILE, out: Path | None = None,
-               force: bool = False, check: bool = True) -> str:
+               force: bool = False, check: bool = True,
+               ask: Callable[[str], str] | None = input) -> str:
     """Весь поток wizard; возвращает отчёт простым языком. Ничего не запускает."""
     root = target.resolve()
     if not root.is_dir():
@@ -138,23 +181,19 @@ def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str,
             lines.append("")
             lines.append(render_baseline(run_baseline(root, scan.test_commands)))
 
-    # planner-роль: промпт + скан → черновик YAML; вызов журналируется (FR-7).
+    # planner-роль: промпт + скан → интервью (QUESTIONS) → черновик YAML (FR-7).
     journal = Journal(cfg.runs_dir, new_run_id())
     journal.write_meta({
         "run_id": journal.run_id, "package": "wizard", "provider": cfg.provider_name,
         "mock": cfg.mock, "models": {role: rc.model for role, rc in cfg.roles.items()},
         "accepted": [],
     })
-    result = client.chat(
-        "planner",
-        [{"role": "system", "content": load_prompt(cfg.prompts_dir, "system")
-          + "\n\n" + load_prompt(cfg.prompts_dir, "planner")},
-         *_planner_prompt(intent, scan_summary)],
-    )
-    log_model_call(journal, cfg, None, "plan", "planner", result)
+    system = (load_prompt(cfg.prompts_dir, "system")
+              + "\n\n" + load_prompt(cfg.prompts_dir, "planner"))
+    draft = _interview(cfg, client, journal, system, intent, scan_summary, ask, lines)
 
     try:
-        raw: Any = yaml.safe_load(result.content)
+        raw: Any = yaml.safe_load(draft)
     except yaml.YAMLError:
         raw = None  # ответ planner'а — не YAML; сохраним как есть, пользователь поправит
     tasks, warnings = _normalize(raw, profile, scan_repo(root).test_commands)
@@ -164,11 +203,19 @@ def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str,
         "# Проверьте карточки задач и подтвердите запуск — это гейт №1.\n"
         "# Acceptance заморожен: тестовые файлы должны оставаться вне scope coder'а.\n"
     )
+    return _write_and_report(out_path, tasks, warnings, draft, header, lines)
+
+
+def _write_and_report(
+    out_path: Path, tasks: list[dict[str, Any]], warnings: list[str],
+    raw_body: str, header: str, lines: list[str]
+) -> str:
+    """Запись черновика + валидация контракта + отчёт (общий хвост wizard/recipe)."""
     if tasks:
         body = yaml.safe_dump({"package": "wizard-draft", "tasks": tasks},
                               allow_unicode=True, sort_keys=False)
     else:
-        body = result.content  # не распарсилось — сохраняем как есть
+        body = raw_body  # не распарсилось — сохраняем как есть
     out_path.write_text(header + body, encoding="utf-8")
 
     # Валидация контракта: файл обязан грузиться load_tasks (DAG, id, scope).
@@ -205,3 +252,78 @@ def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str,
         "  3. Наблюдение: forge status · forge ui · отчёт: forge report --plain",
     ]
     return "\n".join(lines)
+
+
+def _render_template(value: Any, answers: dict[str, str]) -> Any:
+    """Рекурсивная подстановка {ключ} в строках рецепта (без str.format — YAML
+    может содержать фигурные скобки в командах)."""
+    if isinstance(value, str):
+        for key, answer in answers.items():
+            value = value.replace("{" + key + "}", answer)
+        return value
+    if isinstance(value, list):
+        return [_render_template(v, answers) for v in value]
+    if isinstance(value, dict):
+        return {k: _render_template(v, answers) for k, v in value.items()}
+    return value
+
+
+def list_recipes(recipes_dir: Path) -> list[str]:
+    """Доступные рецепты (имя файла без .yaml)."""
+    return sorted(p.stem for p in recipes_dir.glob("*.yaml"))
+
+
+def run_recipe(cfg: ForgeConfig, target: Path, recipe_name: str,
+               profile_name: str = DEFAULT_PROFILE, out: Path | None = None,
+               force: bool = False,
+               ask: Callable[[str], str] | None = input) -> str:
+    """Рецепт → черновик задач без вызова LLM ($0, детерминированно)."""
+    root = target.resolve()
+    if not root.is_dir():
+        raise ValueError(f"Каталог {root} не существует")
+    recipes_dir = cfg.root / "config" / "recipes"
+    recipe_path = recipes_dir / f"{recipe_name}.yaml"
+    if not recipe_path.exists():
+        raise ValueError(
+            f"Рецепт {recipe_name!r} не найден. Доступны: {', '.join(list_recipes(recipes_dir))}"
+        )
+    profile = get_profile(profile_name)
+    out_path = (out or root / OUT_NAME).resolve()
+    if out_path.exists() and not force:
+        raise ValueError(f"{out_path} уже существует — перезапись: --force")
+
+    recipe: Any = yaml.safe_load(recipe_path.read_text(encoding="utf-8"))
+    if not isinstance(recipe, dict) or not isinstance(recipe.get("tasks"), list):
+        raise ValueError(f"{recipe_path}: ожидается рецепт с ключом tasks: [...]")
+
+    lines: list[str] = [
+        f"forge wizard --recipe {recipe_name}: {recipe.get('title', '')} "
+        f"(профиль: {profile.name}, без вызова модели — $0)",
+        "",
+    ]
+    answers: dict[str, str] = {}
+    for question in recipe.get("questions") or []:
+        key = str(question["key"])
+        default = str(question.get("default", ""))
+        if ask is not None:
+            answer = ask(f"{question['ask']} [{default}]").strip() or default
+            lines.append(f"  ? {question['ask']} → {answer}")
+        else:
+            answer = default
+            lines.append(f"  ? {question['ask']} → {answer} (дефолт)")
+        answers[key] = answer
+
+    rendered = _render_template(recipe["tasks"], answers)
+    tasks, warnings = _normalize({"tasks": rendered}, profile, scan_repo(root).test_commands)
+    for question in recipe.get("questions") or []:
+        if not answers.get(str(question["key"])):
+            warnings.append(
+                f"⚠ Вопрос «{question['ask']}» остался без ответа — "
+                "проверьте title/scope в черновике."
+            )
+    lines.append("")
+    header = (
+        f"# Черновик из рецепта {recipe_name} (профиль {profile.name}).\n"
+        "# Проверьте задачи и подтвердите запуск — это гейт №1.\n"
+    )
+    return _write_and_report(out_path, tasks, warnings, "", header, lines)
