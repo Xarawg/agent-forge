@@ -1,0 +1,191 @@
+# Очередь задач v2 — dogfooding: agent-forge дорабатывает сам себя (GAP_ANALYSIS.ru.md §4).
+# Целевой репозиторий: сам agent-forge (`--target .`).
+# Провайдер: DeepSeek через provod.ai (config/providers/provod.yaml).
+# Перед запуском: поднять budgets.per_run_max_cost_usd в config/models.yaml до ~6.00
+# (8 задач × ~$0.4–0.75). Гейты: после t2, t5, t7 — ревью волн человеком.
+
+package: agent-forge-v2
+
+tasks:
+  # ---------- Волна 1: документация и сайт ----------
+
+  - id: t1-docs-workflows
+    title: "docs/WORKFLOWS.md (+ru): три потока с копируемыми командами"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-A3, §4"
+    scope_paths:
+      - "docs/WORKFLOWS.md"
+      - "docs/WORKFLOWS.ru.md"
+      - "README.md"
+      - "README.ru.md"
+    depends_on: []
+    acceptance:
+      - "python -c \"from pathlib import Path; t=Path('docs/WORKFLOWS.md').read_text(encoding='utf-8'); assert 'forge init' in t and 'forge import' in t and 'forge run' in t and 'forge accept' in t\""
+      - "python -c \"from pathlib import Path; t=Path('docs/WORKFLOWS.ru.md').read_text(encoding='utf-8'); assert 'forge init' in t and 'forge run' in t\""
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 150000
+      max_cost_usd: 0.40
+    # Три потока: 1) подготовка проекта (init, .env, git), 2) черновик плана
+    # (forge import + ручная правка tasks.yaml), 3) запуск (run/status/ui/accept/resume).
+    # Ссылки на WORKFLOWS из README.md и README.ru.md.
+
+  - id: t2-site-ru-links
+    title: "Сайт: RU-переключатель ведёт на русские версии доков"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-A1"
+    scope_paths:
+      - "site/index.html"
+      - "site/build_pages.py"
+    depends_on: []
+    acceptance:
+      - "python site/build_pages.py"
+      - "python -c \"from pathlib import Path; t=Path('site/index.html').read_text(encoding='utf-8'); assert 'data-i18n-href' in t and 'SPEC.ru.md' in t\""
+    budget:
+      max_tokens: 120000
+      max_cost_usd: 0.35
+    gate: wave-1
+    # Сейчас футер статичен и ведёт на EN .md. Реализация: data-i18n-href="en_url|ru_url"
+    # на ссылках доков + обработчик в i18n-переключателе; после сборки docs/index.html
+    # обязан пройти инварианты build_pages.py (ссылки остаются https blob-URL).
+
+  # ---------- Волна 2: управляемость ----------
+
+  - id: t3-forge-init
+    title: "Команда forge init: подготовка целевого проекта одной командой"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-A2"
+    scope_paths:
+      - "forge/init.py"
+      - "forge/cli.py"
+      - "tests/test_init.py"
+      - "docs/CONFIGURATION.md"
+      - "docs/CONFIGURATION.ru.md"
+    depends_on: []
+    acceptance:
+      - "python -m pytest tests/test_init.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 200000
+      max_cost_usd: 0.60
+    # forge init --target DIR: проверить/инициализировать git-репо; создать
+    # tasks.yaml-skeleton (комментарии как в config/tasks.example.yaml); проверить
+    # наличие .env и ключа выбранного провайдера (не читая значение); напечатать
+    # следующие шаги (→ docs/WORKFLOWS.md потоки 2–3). Не перезаписывать
+    # существующий tasks.yaml без --force. Тесты — в mock-режиме (conftest уже так работает).
+
+  - id: t4-stop-control
+    title: "Кооперативный стоп: forge stop <run_id> + кнопка в UI"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-B1"
+    scope_paths:
+      - "forge/runner.py"
+      - "forge/cli.py"
+      - "forge/ui.py"
+      - "forge/ui_static/index.html"
+      - "forge/journal.py"
+      - "tests/test_stop.py"
+      - "tests/test_ui.py"
+    depends_on: []
+    acceptance:
+      - "python -m pytest tests/test_stop.py -q"
+      - "python -m pytest tests/test_ui.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 220000
+      max_cost_usd: 0.70
+    # forge stop <run_id> создаёт runs/<run_id>/STOP. Runner проверяет маркер:
+    # перед стартом следующей задачи и между repair-итерациями → прогон завершается
+    # с событием phase=run note='stopped by user'; forge resume продолжает (STOP снимается
+    # при resume). UI: POST /api/runs/<id>/stop (единственный мутирующий эндпоинт —
+    # создаёт только маркер-файл) + кнопка в шапке рана. UI в остальном read-only.
+
+  - id: t5-pipeline-view
+    title: "UI: pipeline-вид стадий задачи с логами (как стадии в GitLab CI)"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-B2"
+    scope_paths:
+      - "forge/ui.py"
+      - "forge/ui_static/index.html"
+      - "tests/test_ui.py"
+    depends_on:
+      - t4-stop-control
+    acceptance:
+      - "python -m pytest tests/test_ui.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 220000
+      max_cost_usd: 0.70
+    gate: wave-2
+    # В карточке задачи — горизонтальная цепочка стадий coder → validate → review
+    # → repair×N с цветом по исходу; клик по стадии раскрывает её события
+    # (фильтр events.jsonl по task_id+phase). Данные уже есть в журнале — только
+    # агрегация в ui.py и рендер в статике. Stdlib-only, без CDN (NFR).
+
+  # ---------- Волна 3: качество и изоляция ----------
+
+  - id: t6-git-diff-reviewer
+    title: "Reviewer получает git diff ветки задачи (долг AF-02)"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-D1; docs/DECISIONS.md AF-02"
+    scope_paths:
+      - "forge/runner.py"
+      - "tests/test_review_diff.py"
+      - "docs/DECISIONS.md"
+      - "docs/DECISIONS.ru.md"
+    depends_on:
+      - t4-stop-control
+    acceptance:
+      - "python -m pytest tests/test_review_diff.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 180000
+      max_cost_usd: 0.55
+    # Если target — git-репо: в промпт reviewer вместо/вместе с дампом файлов
+    # прикладывать `git diff <base>...forge/<task-id>` (лимит ~12000 символов,
+    # обрезка с пометкой). Не git-репо — текущее поведение (дамп). Закрыть долг
+    # AF-02 записью в DECISIONS (.md и .ru.md).
+
+  - id: t7-sandbox-docker
+    title: "Опциональный Docker-сандбокс исполнения (sandbox: docker)"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-C1"
+    scope_paths:
+      - "forge/sandbox.py"
+      - "forge/tools.py"
+      - "forge/runner.py"
+      - "forge/config.py"
+      - "tests/test_sandbox.py"
+      - "docs/CONFIGURATION.md"
+      - "docs/CONFIGURATION.ru.md"
+      - "SECURITY.md"
+    depends_on:
+      - t6-git-diff-reviewer
+    acceptance:
+      - "python -m pytest tests/test_sandbox.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 260000
+      max_cost_usd: 0.90
+    gate: wave-3
+    # config: sandbox: {mode: host|docker, image: "python:3.12-slim", network: none|full}.
+    # mode=docker: на старте прогона поднимается контейнер (target смонтирован rw в /target,
+    # network по политике), run_command и acceptance идут через `docker exec`;
+    # события в журнале получают sandbox: docker. Docker недоступен → событие-варнинг
+    # и host-режим. Тесты — с фейковым docker-exec (без реального демона, как FORGE_MOCK).
+    # SECURITY.md: обновить раздел «What is NOT a sandbox» — docker-режим = граница изоляции,
+    # host-режим остаётся guardrail.
+
+  # ---------- Волна 4: контекст ----------
+
+  - id: t8-repo-map-context
+    title: "Лёгкая repo-map в контекст coder'а"
+    spec_ref: "docs/GAP_ANALYSIS.ru.md §2-D2"
+    scope_paths:
+      - "forge/repomap.py"
+      - "forge/runner.py"
+      - "tests/test_repomap.py"
+    depends_on:
+      - t6-git-diff-reviewer
+    acceptance:
+      - "python -m pytest tests/test_repomap.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 200000
+      max_cost_usd: 0.60
+    # Без tree-sitter (ноль новых зависимостей): по файлам scope_paths собрать карту —
+    # путь + сигнатуры (def/class/function/export по регекспам на язык), лимит ~4000
+    # символов; вставить секцией в промпт задачи. Пустая/неподдержанная — секция опускается.
