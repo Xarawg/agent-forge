@@ -1,0 +1,127 @@
+# Очередь задач onboarding — «указал папку и промпт → готовый набор настроек».
+# Контекст: docs/GAP_ANALYSIS.ru.md §2-A2/A3 + продуктовое решение 2026-08-21
+# (автоматизируем черновик, человек подтверждает; acceptance замораживается вне
+# scope coder'а; профиль по умолчанию — careful).
+# Целевой репозиторий: сам agent-forge (`--target .`).
+#
+# УЖЕ РЕАЛИЗОВАНО ВРУЧНУЮ (2026-08-21, не входит в очередь):
+#   forge/detect.py   — сканер стека (python/node/dotnet/go/rust, CI-команды) + baseline-прогон
+#   forge/profiles.py — профили careful/normal/fast (капы, гейты, подсказки)
+#   forge/init.py     — forge init: git, skeleton tasks.yaml, проверка .env/ключей, baseline
+#   forge/wizard.py   — forge wizard: промпт → planner → tasks.wizard.yaml + прогноз стоимости
+#   report --plain    — отчёт простым языком (сделано/не получилось/что дальше)
+# Эта очередь — то, что осталось: UI-форма, интервью, галерея рецептов, dry-run.
+
+package: agent-forge-onboarding
+
+tasks:
+  # ---------- Волна 1: dry-run и интервью ----------
+
+  - id: ob1-dry-run-forecast
+    title: "forge run --dry-run: прогноз стоимости очереди до запуска"
+    spec_ref: "ревью 2026-08-21 §5.1 (cost-прогноз до запуска)"
+    scope_paths:
+      - "forge/cli.py"
+      - "forge/report.py"
+      - "tests/test_dryrun.py"
+    depends_on: []
+    acceptance:
+      - "python -m pytest tests/test_dryrun.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 150000
+      max_cost_usd: 0.40
+    # --dry-run: загрузить tasks.yaml, оценить стоимость (сумма per-task капов,
+    # при наличии runs/-истории — медиана фактической стоимости похожих задач),
+    # напечатать таблицу «задача → прогноз $» и итог; ничего не запускать.
+
+  - id: ob2-wizard-interview
+    title: "Wizard: уточняющие вопросы planner'а перед черновиком"
+    spec_ref: "онбординг-решение 2026-08-21, фаза 2 (интервью через DISPUTE-механику)"
+    scope_paths:
+      - "forge/wizard.py"
+      - "prompts/10_planner.md"
+      - "tests/test_wizard.py"
+    depends_on:
+      - ob1-dry-run-forecast
+    acceptance:
+      - "python -m pytest tests/test_wizard.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 200000
+      max_cost_usd: 0.60
+    gate: wave-ob1
+    # Если промпт двусмыслен, planner возвращает QUESTIONS: [...] вместо YAML —
+    # wizard задаёт вопросы интерактивно (input), ответы добавляются в контекст,
+    # цикл повторяется (макс 2 раунда). Mock-planner: сценарий ambiguous.
+    # Промпт 10_planner.md дополняется протоколом QUESTIONS (текстовка в prompts/, §7).
+
+  # ---------- Волна 2: UI-форма ----------
+
+  - id: ob3-wizard-ui-form
+    title: "UI: форма просмотра/правки черновика wizard (карточки, не YAML)"
+    spec_ref: "онбординг-решение 2026-08-21, фаза 2 (форма с объяснениями)"
+    scope_paths:
+      - "forge/ui.py"
+      - "forge/ui_static/**"
+      - "tests/test_ui.py"
+    depends_on:
+      - ob2-wizard-interview
+    acceptance:
+      - "python -m pytest tests/test_ui.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 260000
+      max_cost_usd: 0.90
+    # Страница /wizard: читает tasks.wizard.yaml, рендерит карточки задач
+    # (что делаем / какие файлы / как проверяем / кап $) с объяснением каждого
+    # поля простым языком и прогнозом стоимости. Правка полей → сохранение YAML
+    # (первый мутирующий endpoint UI — только перезапись файла черновика).
+    # Stdlib-only, без CDN (NFR). Кнопка «Запустить» печатает готовую команду
+    # forge run (server-режима пока нет — запуск остаётся CLI).
+
+  # ---------- Волна 3: рецепты ----------
+
+  - id: ob4-recipes-gallery
+    title: "Галерея рецептов: config/recipes/*.yaml + forge wizard --recipe"
+    spec_ref: "ARCH_TARGET.ru.md §11 (очереди-шаблоны); онбординг-решение, вариант B"
+    scope_paths:
+      - "config/recipes/**"
+      - "forge/wizard.py"
+      - "forge/cli.py"
+      - "tests/test_recipes.py"
+    depends_on:
+      - ob2-wizard-interview
+    acceptance:
+      - "python -m pytest tests/test_recipes.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 220000
+      max_cost_usd: 0.70
+    gate: wave-ob3
+    # Рецепт = параметризованный пакет задач с вопросами (3–5 шт): «покрыть
+    # модуль тестами», «добавить фичу + тесты», «обновить документацию».
+    # forge wizard --recipe test-coverage --target . — ответы на вопросы →
+    # tasks.wizard.yaml без вызова LLM (детерминированно, $0). Тесты проверяют
+    # рендер каждого рецепта и валидность DAG.
+
+  # ---------- Волна 4: заморозка acceptance ----------
+
+  - id: ob5-frozen-acceptance-lint
+    title: "Линт очереди: acceptance-тесты вне scope coder'а (заморозка)"
+    spec_ref: "онбординг-решение 2026-08-21, железное правило №1"
+    scope_paths:
+      - "forge/models.py"
+      - "forge/cli.py"
+      - "tests/test_frozen.py"
+    depends_on: []
+    acceptance:
+      - "python -m pytest tests/test_frozen.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 150000
+      max_cost_usd: 0.40
+    # forge lint <tasks.yaml>: предупреждение, если scope_paths задачи покрывают
+    # файлы, которые читают acceptance-команды (тесты) — coder мог бы подправить
+    # тест под себя. Wizard/init помечают такие задачи автоматически.
+    # Lint — советчик (warning), не блокер: владелец может осознанно оставить.

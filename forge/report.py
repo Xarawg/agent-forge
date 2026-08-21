@@ -93,3 +93,57 @@ def render_report(report: RunReport, per_run_cap: float | None = None) -> str:
     lines.append(f"Версия промптов: {report.meta.get('prompts_version', '?')}")
     lines.append(f"Провайдер: {report.meta.get('provider', '?')}, mock: {report.meta.get('mock', '?')}")
     return "\n".join(lines)
+
+
+def render_plain(report: RunReport) -> str:
+    """Отчёт простым языком (`forge report --plain`): сделано / не получилось / что дальше.
+
+    Для пользователей, которые не обязаны разбираться в токенах и состояниях:
+    итоги прогона словами и конкретные следующие команды.
+    """
+    done = [t for t in report.tasks if t.state == "done"]
+    failed = [t for t in report.tasks if t.state == "failed"]
+    blocked = [t for t in report.tasks if t.state == "blocked"]
+    pending = [t for t in report.tasks if t.state not in ("done", "failed", "blocked")]
+
+    lines = [f"Прогон {report.run_id} — итог простым языком", ""]
+    lines.append(
+        f"Сделано: {len(done)} из {len(report.tasks)} задач · "
+        f"потрачено ${report.total_cost:.4f} · починок (repair): "
+        f"{sum(t.repair_iterations for t in report.tasks)}"
+    )
+
+    if done:
+        lines.append("")
+        lines.append("✅ Получилось:")
+        lines.extend(f"  · {t.task_id}" for t in done)
+    if failed:
+        lines.append("")
+        lines.append("❌ Не получилось (агент честно остановился, ничего не сломано молча):")
+        for t in failed:
+            reason = f" — {t.note[:80]}" if t.note else ""
+            lines.append(f"  · {t.task_id}{reason}")
+        lines.append(f"  Разобраться: forge log {failed[0].task_id} --run {report.run_id}")
+    if blocked:
+        lines.append("")
+        lines.append("⏸ Остановлено и ждёт вашего решения:")
+        for t in blocked:
+            reason = f" — {t.note[:80]}" if t.note else ""
+            lines.append(f"  · {t.task_id}{reason}")
+        lines.append("  Обычно это DISPUTE (противоречие в спеке — уточните её) "
+                     "или исчерпан бюджет (поднимите кап в tasks.yaml).")
+    if pending:
+        lines.append("")
+        lines.append(f"⏳ Ещё не выполнены: {len(pending)} задач.")
+
+    lines.append("")
+    if not report.tasks:
+        lines.append("Задач в прогоне нет — возможно, прогон только начался. Позже: forge status.")
+    elif failed or blocked or pending:
+        lines.append(f"Что дальше: разберите причины выше, затем продолжите — "
+                     f"forge resume {report.run_id}")
+        lines.append("Завершённые (done) задачи переигрываться не будут.")
+    else:
+        lines.append("Все задачи выполнены. Проверьте результат (git diff), "
+                     "затем push — вручную, forge его не делает (NFR-5).")
+    return "\n".join(lines)

@@ -8,12 +8,14 @@ from pathlib import Path
 
 from .agents import log_model_call
 from .config import ForgeConfig, forge_root, load_config
+from .init import init_project
 from .journal import Journal, new_run_id
 from .llm import make_client
 from .prompts import load_prompt
-from .report import build_report, latest_run_id, render_report, render_status
+from .report import build_report, latest_run_id, render_plain, render_report, render_status
 from .runner import Runner
 from .ui import serve
+from .wizard import run_wizard
 
 
 def _resolve_run_id(cfg: ForgeConfig, run_id: str | None) -> str:
@@ -88,7 +90,39 @@ def cmd_log(args: argparse.Namespace) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     cfg = load_config()
     run_id = _resolve_run_id(cfg, args.run_id)
-    print(render_report(build_report(cfg.runs_dir, run_id), cfg.budgets.per_run_max_cost_usd))
+    report = build_report(cfg.runs_dir, run_id)
+    if args.plain:
+        print(render_plain(report))
+    else:
+        print(render_report(report, cfg.budgets.per_run_max_cost_usd))
+    return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Подготовка проекта: git, skeleton tasks.yaml, baseline. Без API-ключа."""
+    target = Path(args.target).resolve() if args.target else Path.cwd()
+    print(init_project(
+        target, forge_root(),
+        profile_name=args.profile, force=args.force, check=not args.no_check,
+    ))
+    return 0
+
+
+def cmd_wizard(args: argparse.Namespace) -> int:
+    """Промпт человеческим языком → черновик задач/проверок/бюджетов."""
+    cfg = load_config(provider_path=Path(args.provider) if args.provider else None)
+    intent = args.prompt
+    if args.prompt_file:
+        intent = Path(args.prompt_file).read_text(encoding="utf-8")
+    if not intent:
+        raise SystemExit("wizard: нужен --prompt или --prompt-file")
+    target = Path(args.target).resolve() if args.target else Path.cwd()
+    print(run_wizard(
+        cfg, make_client(cfg), target, intent,
+        profile_name=args.profile,
+        out=Path(args.out) if args.out else None,
+        force=args.force, check=not args.no_check,
+    ))
     return 0
 
 
@@ -172,7 +206,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_report = sub.add_parser("report", help="сводка: токены, стоимость, модели")
     p_report.add_argument("run_id", nargs="?")
+    p_report.add_argument("--plain", action="store_true",
+                          help="отчёт простым языком: сделано/не получилось/что дальше")
     p_report.set_defaults(func=cmd_report)
+
+    p_init = sub.add_parser("init", help="подготовить проект: git, skeleton tasks.yaml, baseline")
+    p_init.add_argument("--target", help="корень целевого проекта (по умолчанию — текущий каталог)")
+    p_init.add_argument("--profile", default="careful",
+                        choices=["careful", "normal", "fast"], help="профиль капов (по умолчанию careful)")
+    p_init.add_argument("--force", action="store_true", help="перезаписать существующий tasks.yaml")
+    p_init.add_argument("--no-check", action="store_true", help="не прогонять baseline-проверки")
+    p_init.set_defaults(func=cmd_init)
+
+    p_wizard = sub.add_parser("wizard", help="черновик настроек из промпта: задачи, проверки, бюджеты")
+    p_wizard.add_argument("--prompt", help="что нужно сделать, своими словами")
+    p_wizard.add_argument("--prompt-file", help="файл с описанием задачи вместо --prompt")
+    p_wizard.add_argument("--target", help="корень целевого проекта (по умолчанию — текущий каталог)")
+    p_wizard.add_argument("--profile", default="careful",
+                          choices=["careful", "normal", "fast"], help="профиль капов (по умолчанию careful)")
+    p_wizard.add_argument("--out", help="куда записать черновик (по умолчанию <target>/tasks.wizard.yaml)")
+    p_wizard.add_argument("--force", action="store_true", help="перезаписать существующий черновик")
+    p_wizard.add_argument("--no-check", action="store_true", help="не прогонять baseline-проверки")
+    p_wizard.add_argument("--provider")
+    p_wizard.set_defaults(func=cmd_wizard)
 
     p_accept = sub.add_parser("accept", help="человеческий гейт №3: принять задачу (merge ветки)")
     p_accept.add_argument("task_id")

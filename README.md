@@ -31,10 +31,18 @@ Requires Python ≥ 3.12.
 ```bash
 pip install -e .
 
+# Prepare a project in one command — detects the stack, inits git,
+# writes a tasks.yaml skeleton and runs baseline checks (no API key needed):
+forge init --target /path/to/any/dir
+
+# Or describe what you want in plain words — the wizard scans the repo,
+# checks the baseline and drafts tasks/acceptance/budgets for you to confirm:
+forge wizard --target /path/to/any/dir --prompt "add a hello-world endpoint with tests"
+
 # Full cycle without an API key (mock mode):
 FORGE_MOCK=1 forge run --tasks config/tasks.example.yaml --target /path/to/any/dir
 forge status
-forge report
+forge report --plain   # human-readable summary: done / failed / what next
 forge log <task-id>
 ```
 

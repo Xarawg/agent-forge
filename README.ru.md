@@ -62,6 +62,34 @@ forge import --spec <SPEC.md пакета> --out tasks.draft.yaml   # черно
 `--target` по умолчанию — текущий каталог. Без git-репозитория в target
 ветвление/коммит пропускаются (запись в журнале).
 
+### Онбординг: init и wizard
+
+Подготовка проекта одной командой — определение стека, git-init, skeleton
+`tasks.yaml` с найденными проверками, baseline-прогон (тесты на чистом репо до
+стартов агентов; красный baseline — честный стоп-сигнал):
+
+```bash
+forge init --target /path/to/repo            # профиль careful по умолчанию
+forge init --target /path/to/repo --profile normal --force
+```
+
+Черновик настроек из промпта человеческим языком — скан репо + baseline +
+planner собирает задачи, acceptance (из найденных проверок) и бюджеты профиля,
+печатает прогноз стоимости. Черновик подтверждает человек — это гейт №1:
+
+```bash
+forge wizard --target /path/to/repo --prompt "добавь endpoint со списком пользователей и тесты"
+# → /path/to/repo/tasks.wizard.yaml — проверьте и запустите:
+forge run --tasks /path/to/repo/tasks.wizard.yaml --target /path/to/repo
+forge report --plain   # итог простым языком: сделано / не получилось / что дальше
+```
+
+Профили капов: `careful` (задача ≤ $0.30, гейт после каждой задачи — для первых
+прогонов и free-моделей), `normal` (дефолты models.yaml), `fast` (крупные
+задачи, редкие гейты). Оставшееся из онбординг-плана (UI-форма черновика,
+интервью planner'а, галерея рецептов, `--dry-run`) — очередь
+`config/tasks.onboarding.yaml`.
+
 ## Запуск в Docker
 
 ```bash
