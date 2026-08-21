@@ -17,14 +17,14 @@ Running "write me a feature" through an LLM is easy. Running *dozens* of such ta
 
 - **Onboarding for any project state** — from an empty folder to a legacy monorepo:
   - `forge init` — detects the stack (Python/Node/.NET), inits git if needed, writes a `tasks.yaml` skeleton with the checks it actually found, runs a baseline (red baseline = honest stop before any model call).
-  - `forge wizard --prompt "..."` — scans the repo, runs baseline checks, asks clarifying questions when the request is ambiguous (QUESTIONS protocol), and drafts a complete `tasks.wizard.yaml`: tasks, scopes, acceptance, budgets, gates — plus a cost forecast. You confirm the draft (human gate #1) and run it.
+  - `forge wizard --prompt "..."` — scans the repo, runs baseline checks, asks clarifying questions when the request is ambiguous (QUESTIONS protocol), and drafts a complete `tasks.wizard.yaml`: tasks, scopes, acceptance, budgets, gates — plus a cost forecast. Acceptance that cannot pass yet (a test command before any test-writing task, in a repo without tests) is stripped with a visible warning. You confirm the draft (human gate #1) and run it.
   - `forge wizard --recipe feature` — ready-made recipes from `config/recipes/` (`feature`, `test-coverage`, `docs-sync`) with no LLM call at all ($0).
   - `forge import --spec SPEC.md` — drafts a task queue from an existing specification via the planner role.
 - **Task queue in `tasks.yaml`**: DAG with `depends_on`, per-task write scope (`scope_paths`), acceptance commands, per-task budgets, milestone gates.
 - **Agent loop**: coder writes code with `read_file` / `write_file` / `list_dir` / `run_command` tools — scope-controlled, command allowlist, dependency installs blocked at tool level.
 - **Pipeline per task**: coder → acceptance commands → reviewer (second model) → repair loop → `done` / `failed` / `blocked`.
 - **Human gate**: tasks marked with `gate` pause the run until `forge accept <task-id>` (records acceptance, merges the local branch). A `blocked`/`failed` task can also be accepted manually as an explicit owner override.
-- **Pre-flight tooling**: `forge run --dry-run` (cost forecast without starting anything) and `forge lint <tasks.yaml>` (contract validation + frozen-acceptance advice before you spend a cent).
+- **Pre-flight tooling**: `forge run --dry-run` (cost forecast without starting anything) and `forge lint <tasks.yaml>` (contract validation + acceptance advice: tests frozen outside coder scope, and every test command passable at the task's DAG position — before you spend a cent).
 - **Git integration**: branch `forge/<task-id>` per task, local commit after reviewer approval; **never pushes**. Works fine on non-git targets too (branching is skipped with a journal entry).
 - **Provider presets** (`config/providers/*.yaml`): any OpenAI-compatible endpoint — DeepSeek, OpenRouter free models, local Ollama, etc. Models and prices live in `config/models.yaml`, not in code.
 - **Mock mode** `FORGE_MOCK=1`: the entire cycle without an API key — for CI and development.
@@ -121,7 +121,7 @@ forge ui                              # kanban dashboard on http://127.0.0.1:876
 | `forge init [--target DIR] [--profile careful\|normal\|fast] [--force] [--no-check]` | Prepare a project: stack detection, git init, skeleton `tasks.yaml`, baseline checks |
 | `forge wizard --prompt "..." [--recipe NAME] [--profile ...] [--yes] [--out FILE] [--no-check]` | Draft a full setup (tasks/acceptance/budgets/gates) from a plain-words prompt, a prompt file, or a recipe |
 | `forge import --spec SPEC.md [--out FILE]` | Draft `tasks.yaml` from an existing specification via the planner |
-| `forge lint <tasks.yaml>` | Pre-flight validation: contract errors + frozen-acceptance advice |
+| `forge lint <tasks.yaml>` | Pre-flight validation: contract errors + acceptance advice (frozen scope, DAG-order passability) |
 | `forge run --tasks F [--target DIR] [--spec SPEC.md] [--dry-run] [--provider PRESET]` | Run the queue; `--dry-run` prints a cost forecast and executes nothing |
 | `forge resume <run_id> [--target DIR]` | Continue a stopped/paused run from on-disk snapshots |
 | `forge status [run_id]` | Task table: state, tokens, cost, repairs, notes |

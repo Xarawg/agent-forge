@@ -524,7 +524,7 @@
         <div class="line o">[recipe] module path? → src/auth · test command? → python -m pytest -q</div>
         <div class="line o">[wizard] draft ready · no LLM call · $0</div>
         <div class="line"><span class="p">$</span> <span class="c">forge lint ./legacy/tasks.wizard.yaml</span></div>
-        <div class="line ok">[lint] contract OK · 1 advice: freeze acceptance versions</div>
+        <div class="line ok">[lint] contract OK · acceptance passable at every DAG position</div>
         <div class="line"><span class="p">$</span> <span class="c">forge run --tasks ./legacy/tasks.wizard.yaml --target ./legacy</span></div>
       </div>
     </div>
@@ -858,7 +858,7 @@ const I18N = {
     how_1_p: "Describe the work in plain words and the wizard drafts tasks.yaml for you — or write it yourself, or import it from a SPEC.md. Either way a human confirms the draft before anything runs.",
     how_1_l1: "Wizard: repo scan + baseline + clarifying questions + cost forecast",
     how_1_l2: "Recipes render deterministically — no LLM call, $0",
-    how_1_l3: "Lint catches contract errors and fragile acceptance before launch",
+    how_1_l3: "Lint catches contract errors, fragile and not-yet-passable acceptance before launch",
     how_1_l4: "Edit the draft as task cards in the browser UI",
     how_2_title: "2. Agent Loop with Guardrails",
     how_2_p: "The coder agent gets read_file, write_file, list_dir, and run_command — nothing else.",
@@ -874,9 +874,9 @@ const I18N = {
     how_3_l4: "Full journal in runs/<id>/events.jsonl",
     cmd_label: "Command Reference",
     cmd_init: "Prepare a project: stack detection, git init, skeleton tasks.yaml, baseline checks",
-    cmd_wizard: "Draft tasks, acceptance, budgets and gates from plain words or a recipe; asks clarifying questions; prints a cost forecast",
+    cmd_wizard: "Draft tasks, acceptance, budgets and gates from plain words or a recipe; asks clarifying questions; strips acceptance that cannot pass yet; prints a cost forecast",
     cmd_import: "Draft a task queue from an existing specification via the planner",
-    cmd_lint: "Pre-flight validation: contract errors + frozen-acceptance advice",
+    cmd_lint: "Pre-flight validation: contract errors + acceptance advice — tests frozen outside coder scope, every test command passable at the task's DAG position",
     cmd_run: "Run the queue; --dry-run prints a cost forecast and executes nothing",
     cmd_resume: "Continue a stopped or paused run from on-disk history snapshots",
     cmd_status: "Task table: state, tokens, cost, repairs, notes",
@@ -933,7 +933,7 @@ const I18N = {
     how_1_p: "Опиши работу своими словами, и wizard начертит tasks.yaml за тебя — или напиши сам, или импортируй из SPEC.md. В любом случае черновик перед запуском подтверждает человек.",
     how_1_l1: "Wizard: скан репо + baseline + уточняющие вопросы + прогноз стоимости",
     how_1_l2: "Рецепты рендерятся детерминированно — без вызова LLM, $0",
-    how_1_l3: "Lint ловит ошибки контракта и хрупкий acceptance до запуска",
+    how_1_l3: "Lint ловит ошибки контракта, хрупкий и ещё непроходимый acceptance до запуска",
     how_1_l4: "Правь черновик карточками задач в браузерном UI",
     how_2_title: "2. Агентный цикл с ограничениями",
     how_2_p: "Coder-агент получает read_file, write_file, list_dir и run_command — ничего больше.",
@@ -949,9 +949,9 @@ const I18N = {
     how_3_l4: "Полный журнал в runs/<id>/events.jsonl",
     cmd_label: "Справочник команд",
     cmd_init: "Подготовить проект: определение стека, git init, skeleton tasks.yaml, baseline-проверки",
-    cmd_wizard: "Черновик задач, acceptance, бюджетов и гейтов из описания своими словами или рецепта; задаёт уточняющие вопросы; печатает прогноз стоимости",
+    cmd_wizard: "Черновик задач, acceptance, бюджетов и гейтов из описания своими словами или рецепта; задаёт уточняющие вопросы; убирает acceptance, который ещё не может пройти; печатает прогноз стоимости",
     cmd_import: "Черновик очереди задач из существующей спецификации через planner",
-    cmd_lint: "Предполётная проверка: ошибки контракта + советы по заморозке acceptance",
+    cmd_lint: "Предполётная проверка: ошибки контракта + советы по acceptance — тесты заморожены вне scope coder'а, каждая тестовая команда проходима на позиции задачи в DAG",
     cmd_run: "Запуск очереди; --dry-run печатает прогноз стоимости и ничего не выполняет",
     cmd_resume: "Продолжить остановленный прогон со снапшотов истории на диске",
     cmd_status: "Таблица задач: состояние, токены, стоимость, починки, заметки",
