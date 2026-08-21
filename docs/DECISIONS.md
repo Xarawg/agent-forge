@@ -68,3 +68,20 @@ Pilot coder installed node_modules (tsx/esbuild) and wrote tsx test bridge despi
 
 **Context:** competitive analysis (docs/COMPETITIVE_ANALYSIS.md) recommended a public mini-benchmark «model × cost × % done» as evidence base.
 **Decision (owner, 2026-08-20):** rejected. agent-forge is provider-agnostic: the owner's runs go through their provider with their prices, other users bring their own provider keys and models — owner's cost figures do not transfer and would mislead. Cost accounting stays per-user via `config/models.yaml` prices and `forge report`; reproducibility evidence is the on-disk journal format and mock mode, not a published leaderboard.
+
+## AF-14. Server mode is official (amends NFR-2)
+
+**Context:** v3 target architecture (docs/ARCH_TARGET.ru.md) requires a UI served from Docker managing runs interactively.
+**Decision (owner, 2026-08-21, «все дефолты ок»):** two modes coexist. CLI one-shot stays forever (CI, development, kill-safe). `forge serve` is an optional daemon; on-disk journals (`runs/`) remain the single source of truth in both modes — the server survives restarts by reading them. NFR-2 amended accordingly.
+
+## AF-15. FastAPI as optional `[server]` extra
+
+**Decision (owner, 2026-08-21):** approved. Core stays stdlib-only (NFR-1); server mode uses FastAPI + uvicorn as an optional extra `pip install agent-forge[server]`. UI static remains build-step-free.
+
+## AF-16. Git model for remote execution: fetch + merge on accept
+
+**Decision (owner, 2026-08-21):** approved. Under remote execution the target clone lives on the remote host; task branches/commits are created there; `forge accept` fetches the task branch over SSH and merges `--no-ff` locally. NFR-5 («never push») preserved — fetch is the pull direction.
+
+## AF-17. Remote transport: `DOCKER_HOST=ssh://` only (v3)
+
+**Decision (owner, 2026-08-21):** remote execution reuses the Docker executor against a remote daemon via `DOCKER_HOST=ssh://user@host` — one sandbox code path, local or remote. A pure-SSH executor (no Docker on target host) is deferred until a real need appears. LLM keys never leave the control plane; only files and commands travel to the remote host.

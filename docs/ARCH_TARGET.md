@@ -31,4 +31,11 @@ No k8s, no multi-tenant SaaS, no frontend build step, no custom remote agent dae
 
 ## Owner decisions required before v3
 
-AF-14 (server mode official) · FastAPI optional dep vs strict stdlib · git fetch+merge accept model · transport: `DOCKER_HOST=ssh` only, or pure-SSH executor too.
+All closed 2026-08-21: AF-14 (server mode official, NFR-2 amended) · AF-15 (FastAPI as optional `[server]` extra) · AF-16 (git fetch+merge accept model) · AF-17 (`DOCKER_HOST=ssh` only; pure-SSH executor deferred).
+
+## Added pillars (2026-08-21)
+
+- **Context & retrieval**: embeddings via an `embedder` role (same OpenAI-compatible mechanism), sqlite-vec single-file store (`runs/context.db`), incremental `forge index`, hybrid coder context (spec → repo-map → top-k vector chunks, all journaled as `phase=context` events), prompt front-matter metadata linked to outcomes via `prompts_version`. Mock embedder keeps CI keyless.
+- **Evals**: private per-user harness (AF-13 still stands — nothing public). Golden suites (`evals/suites/*.yaml`) with trap tasks (expect DISPUTE / scope-block, not hallucination), `forge eval --suite`, `forge eval compare` for A/B across models/prompt versions, deterministic mock-suite as CI gate.
+- **Observability**: `/metrics` (Prometheus) on `forge serve`, optional OTLP tracing extra (`[otel]`, trace=run, span=task phase), webhook alerts on blocked/failed/budget-cap.
+- **Company AI features frame**: agent-forge accelerates building RAG / tool-calling / orchestration features in target products via task-queue templates with acceptance contracts; its own modules serve as a readable reference implementation; `forge eval` doubles as a quality harness for product LLM features.

@@ -1,0 +1,387 @@
+# Очередь задач v3 — agent-forge строит свою целевую архитектуру (ARCH_TARGET.ru.md).
+# Запуск ПОСЛЕ завершения config/tasks.v2.yaml (v3 опирается на t4 stop-control
+# и t7 sandbox-docker из v2). Целевой репозиторий: сам agent-forge (`--target .`).
+# Провайдер: DeepSeek (provod.ai). Гейты — в конце каждой волны.
+# Перед запуском: budgets.per_run_max_cost_usd в config/models.yaml → ~12.00.
+
+package: agent-forge-v3
+
+tasks:
+  # ---------- Wave A: server skeleton ----------
+
+  - id: v3-a1-server-skeleton
+    title: "forge serve: FastAPI server-режим, read-API из ui.py"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.1; AF-14, AF-15"
+    scope_paths:
+      - "forge/server/**"
+      - "forge/cli.py"
+      - "pyproject.toml"
+      - "tests/test_server.py"
+    depends_on: []
+    acceptance:
+      - "python -m pytest tests/test_server.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 260000
+      max_cost_usd: 0.90
+    # pyproject: extras [server] = fastapi, uvicorn (ядро остаётся stdlib-only).
+    # forge serve: портировка существующих read-эндпоинтов из ui.py (список прогонов,
+    # детали, события, отчёт) без смены контракта; отдача ui_static. Токен-auth:
+    # middleware проверяет FORGE_UI_TOKEN (если задан) по заголовку Authorization.
+    # Журналы runs/ — источник истины; сервер их только читает для read-API.
+
+  - id: v3-a2-sse-and-run-start
+    title: "SSE-стрим событий + запуск прогона в потоке (POST /api/runs)"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.1, §3.3"
+    scope_paths:
+      - "forge/server/**"
+      - "forge/runner.py"
+      - "tests/test_server.py"
+    depends_on:
+      - v3-a1-server-skeleton
+    acceptance:
+      - "python -m pytest tests/test_server.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 260000
+      max_cost_usd: 0.90
+    gate: wave-a
+    # POST /api/runs {tasks_path, target, spec_path?} → Runner в daemon-потоке,
+    # run_id в ответе. GET /api/runs/<id>/events/stream — SSE: tail events.jsonl
+    # с polling-интервалом ~0.5s, закрытие при событии 'run finished'.
+    # Параллельные прогоны одного target запрещены (409). Тесты — с TestClient
+    # fastapi (mock-режим LLM).
+
+  # ---------- Wave B: control API + UI ----------
+
+  - id: v3-b1-control-endpoints
+    title: "Control API: stop/resume/accept через server"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.3; опирается на v2 t4 (STOP-маркер)"
+    scope_paths:
+      - "forge/server/**"
+      - "forge/runner.py"
+      - "forge/journal.py"
+      - "tests/test_server.py"
+    depends_on:
+      - v3-a2-sse-and-run-start
+    acceptance:
+      - "python -m pytest tests/test_server.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 240000
+      max_cost_usd: 0.80
+    # POST /api/runs/<id>/stop → STOP-маркер (механика v2 t4; если v2 ещё не
+    # прогнан — реализовать маркер здесь: runner проверяет между задачами и
+    # repair-итерациями). POST /api/runs/<id>/resume → новый поток Runner.resume.
+    # POST /api/tasks/<task_id>/accept → Runner.accept (гейт №3) в активном прогоне.
+
+  - id: v3-b2-ui-controls
+    title: "UI: запуск/стоп/резюме/accept, живой pipeline по SSE"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.3; GAP §2-B1/B2"
+    scope_paths:
+      - "forge/ui_static/**"
+      - "forge/server/**"
+      - "tests/test_ui.py"
+    depends_on:
+      - v3-b1-control-endpoints
+    acceptance:
+      - "python -m pytest tests/test_ui.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 240000
+      max_cost_usd: 0.80
+    gate: wave-b
+    # Статика без build-шага (принцип). Форма запуска прогона (tasks.yaml из репо
+    # server'а), кнопки Stop/Resume/Accept на гейтах, стадии задачи обновляются
+    # по SSE без meta-refresh. Токен — из prompt() при первом 401.
+
+  # ---------- Wave C: execution plane ----------
+
+  - id: v3-c1-executor-protocol
+    title: "Executor-протокол: ToolBox → HostExecutor за интерфейсом"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.4"
+    scope_paths:
+      - "forge/executor.py"
+      - "forge/tools.py"
+      - "forge/runner.py"
+      - "forge/agents.py"
+      - "tests/test_executor.py"
+    depends_on:
+      - v3-b1-control-endpoints
+    acceptance:
+      - "python -m pytest tests/test_executor.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 280000
+      max_cost_usd: 1.00
+    # Протокол Executor: write_file/read_file/list_dir/run_command/run_acceptance.
+    # Текущий ToolBox становится HostExecutor без смены поведения (все существующие
+    # тесты зелёные — это и есть регрессионный acceptance). Scope-контроль и
+    # deny-паттерны остаются в базовом классе/декораторе — общие для всех executor'ов.
+
+  - id: v3-c2-docker-executor
+    title: "DockerExecutor: исполнение в контейнере (локальный демон)"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.4; GAP §2-C1; AF-17"
+    scope_paths:
+      - "forge/executor.py"
+      - "forge/sandbox.py"
+      - "forge/config.py"
+      - "forge/runner.py"
+      - "tests/test_sandbox.py"
+      - "docs/CONFIGURATION.md"
+      - "docs/CONFIGURATION.ru.md"
+      - "SECURITY.md"
+    depends_on:
+      - v3-c1-executor-protocol
+    acceptance:
+      - "python -m pytest tests/test_sandbox.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 280000
+      max_cost_usd: 1.00
+    # config: executor: {mode: host|docker, image: "python:3.12-slim",
+    # network: none|full, docker_host: null|ssh://user@host}. mode=docker: per-run
+    # контейнер, target rw в /target, команды через docker exec, network-политика.
+    # Если v2 t7 уже прогнан — это эволюция sandbox.py, не дубль. Docker недоступен
+    # → событие-варнинг в журнал + host-режим. Тесты с фейковым docker CLI
+    # (без реального демона). SECURITY.md: docker-режим = изоляция, host = guardrail.
+
+  - id: v3-c3-remote-docker
+    title: "Remote execution: DOCKER_HOST=ssh + git fetch-модель accept"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.4, §3.5; AF-16, AF-17"
+    scope_paths:
+      - "forge/executor.py"
+      - "forge/sandbox.py"
+      - "forge/runner.py"
+      - "tests/test_remote.py"
+      - "docs/CONFIGURATION.md"
+      - "docs/CONFIGURATION.ru.md"
+      - "SECURITY.md"
+    depends_on:
+      - v3-c2-docker-executor
+    acceptance:
+      - "python -m pytest tests/test_remote.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 280000
+      max_cost_usd: 1.00
+    gate: wave-c
+    # docker_host=ssh://user@host: все docker-команды через DOCKER_HOST; образ
+    # собирается/подтягивается на удалённом демоне; LLM-ключи в контейнер не
+    # передаются (проверка тестом: env контейнера без *_API_KEY). accept:
+    # git fetch forge/<id> с удалённого (git remote add по SSH) + merge --no-ff.
+    # Тесты — фейковый ssh/docker CLI. SECURITY.md: граница «ключи не покидают
+    # control plane».
+
+  # ---------- Wave D: state & scale ----------
+
+  - id: v3-d1-sqlite-index
+    title: "SQLite-индекс поверх runs/ + forge reindex"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.2"
+    scope_paths:
+      - "forge/indexdb.py"
+      - "forge/cli.py"
+      - "forge/report.py"
+      - "tests/test_indexdb.py"
+    depends_on:
+      - v3-c3-remote-docker
+    acceptance:
+      - "python -m pytest tests/test_indexdb.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 240000
+      max_cost_usd: 0.80
+    # runs/index.db: таблицы runs/tasks/events_agg/costs; инкрементальное
+    # обновление из events.jsonl; forge reindex — полная пересборка (индекс
+    # пересобираем, журналы — истина). report/status читают индекс, если он свежий
+    # (mtime новее журналов), иначе — как сейчас.
+
+  - id: v3-d2-multi-run-dashboard
+    title: "UI: multi-run dashboard, параллельные прогоны разных target"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.6"
+    scope_paths:
+      - "forge/server/**"
+      - "forge/ui_static/**"
+      - "forge/indexdb.py"
+      - "tests/test_server.py"
+    depends_on:
+      - v3-d1-sqlite-index
+    acceptance:
+      - "python -m pytest tests/test_server.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 240000
+      max_cost_usd: 0.80
+    gate: wave-d
+    # Дашборд: сводка по всем прогонам из индекса (стоимость/день, состояния,
+    # repair rate). Планировщик: параллельные прогоны РАЗНЫХ target-репо
+    # (один target = один активный прогон — 409 из a2). per-day кап считается
+    # по индексу. Параллелизм внутри DAG — НЕ в этой задаче (отдельное решение).
+
+  # ---------- Wave E: distribution ----------
+
+  - id: v3-e1-distribution
+    title: "Дистрибуция: ghcr.io образ server-режима, compose, PyPI workflow"
+    spec_ref: "docs/ARCH_TARGET.ru.md §3.7; GAP §2-E1"
+    scope_paths:
+      - ".github/workflows/release.yml"
+      - "docker-compose.server.yml"
+      - "pyproject.toml"
+      - "README.md"
+      - "README.ru.md"
+    depends_on:
+      - v3-d2-multi-run-dashboard
+    acceptance:
+      - "python -m pytest -q"
+      - "python -c \"import tomllib; tomllib.loads(open('pyproject.toml','rb').read().decode())\""
+    budget:
+      max_tokens: 160000
+      max_cost_usd: 0.50
+    gate: wave-e
+    # release.yml (по тегу v*): build+push образа в ghcr.io, publish в PyPI
+    # (trusted publishing). docker-compose.server.yml: server + тома runs/config/.env
+    # + порт. README: секция «Server mode from Docker».
+
+  # ---------- Wave F: context & retrieval ----------
+
+  - id: v3-f1-context-index
+    title: "forge index: эмбеддинги + sqlite-vec хранилище контекста"
+    spec_ref: "docs/ARCH_TARGET.ru.md §8.1–8.2"
+    scope_paths:
+      - "forge/context.py"
+      - "forge/llm.py"
+      - "forge/config.py"
+      - "forge/cli.py"
+      - "config/models.yaml"
+      - "pyproject.toml"
+      - "tests/test_context.py"
+    depends_on:
+      - v3-c3-remote-docker
+    acceptance:
+      - "python -m pytest tests/test_context.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 280000
+      max_cost_usd: 1.00
+    # Роль embedder в models.yaml (OpenAI-совместимый /v1/embeddings, цена за 1M).
+    # sqlite-vec как опциональный extra [context]; чанкер по заголовкам/сигнатурам
+    # (~1–2K символов, перекрытие). forge index --target: инкрементально по хешу
+    # файла в runs/context.db. Mock-embedder (детерминированный хеш-вектор) для
+    # FORGE_MOCK/CI — тесты без API. sqlite-vec недоступен → варнинг, retrieval off.
+
+  - id: v3-f2-hybrid-context
+    title: "Гибридный контекст coder'а: repo-map + top-k векторных чанков"
+    spec_ref: "docs/ARCH_TARGET.ru.md §8.3–8.4"
+    scope_paths:
+      - "forge/runner.py"
+      - "forge/context.py"
+      - "forge/journal.py"
+      - "prompts/50_task_template.md"
+      - "tests/test_context.py"
+    depends_on:
+      - v3-f1-context-index
+    acceptance:
+      - "python -m pytest tests/test_context.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 240000
+      max_cost_usd: 0.80
+    gate: wave-f
+    # Промпт задачи: spec → repo-map (v2 t8, если есть) → top-k чанков по тексту
+    # задачи (k и лимит символов в конфиге). Событие phase=context: какие чанки
+    # (путь+score) попали в промпт. Front-matter метаданные в prompts/*.md
+    # (назначение, changelog) — парсятся prompts.py, версия по-прежнему в run.json.
+
+  # ---------- Wave G: evals ----------
+
+  - id: v3-g1-eval-harness
+    title: "forge eval: харнес золотых наборов (evals/suites/*.yaml)"
+    spec_ref: "docs/ARCH_TARGET.ru.md §9"
+    scope_paths:
+      - "forge/eval.py"
+      - "forge/cli.py"
+      - "evals/suites/**"
+      - "evals/fixtures/**"
+      - "tests/test_eval.py"
+      - "docs/CONFIGURATION.md"
+    depends_on:
+      - v3-b2-ui-controls
+    acceptance:
+      - "python -m pytest tests/test_eval.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 280000
+      max_cost_usd: 1.00
+    # Suite: фикстуры мини-репо + задачи с известным исходом, включая ловушки
+    # (противоречие в спеке → ожидается DISPUTE; задача вне scope → блок).
+    # forge eval --suite NAME → runs/evals/<id>/: pass rate, repair-итерации,
+    # стоимость, доля корректных отказов. Стартовый suite: 3–5 задач на сам
+    # agent-forge (мелкие правки с известным результатом). Mock-suite в CI.
+
+  - id: v3-g2-eval-compare
+    title: "forge eval compare: A/B по моделям и версиям промптов"
+    spec_ref: "docs/ARCH_TARGET.ru.md §9; связка prompts_version из run.json"
+    scope_paths:
+      - "forge/eval.py"
+      - "forge/report.py"
+      - "tests/test_eval.py"
+    depends_on:
+      - v3-g1-eval-harness
+      - v3-f2-hybrid-context
+    acceptance:
+      - "python -m pytest tests/test_eval.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 200000
+      max_cost_usd: 0.65
+    gate: wave-g
+    # compare <eval_run_a> <eval_run_b>: таблица дельт по задачам (pass/fail,
+    # итерации, $) с атрибуцией к моделям/prompts_version из run.json.
+    # Markdown-отчёт в runs/evals/.
+
+  # ---------- Wave H: observability ----------
+
+  - id: v3-h1-metrics-endpoint
+    title: "/metrics (Prometheus) на forge serve: стоимость, фазы, repair rate"
+    spec_ref: "docs/ARCH_TARGET.ru.md §10"
+    scope_paths:
+      - "forge/server/**"
+      - "forge/metrics.py"
+      - "tests/test_metrics.py"
+    depends_on:
+      - v3-d2-multi-run-dashboard
+    acceptance:
+      - "python -m pytest tests/test_metrics.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 220000
+      max_cost_usd: 0.75
+    # Prometheus text format; агрегация из indexdb + живые счётчики активных
+    # прогонов: tokens/cost по ролям и моделям, длительность фаз (histogram),
+    # repair rate, blocked/failed rate, utilization капов. Стdlib-рендер текста,
+    # без prometheus-client в ядре.
+
+  - id: v3-h2-otel-and-alerts
+    title: "Опциональный OTLP-трейсинг + вебхук-алерты"
+    spec_ref: "docs/ARCH_TARGET.ru.md §10"
+    scope_paths:
+      - "forge/tracing.py"
+      - "forge/runner.py"
+      - "forge/config.py"
+      - "pyproject.toml"
+      - "tests/test_tracing.py"
+      - "docs/CONFIGURATION.md"
+      - "docs/CONFIGURATION.ru.md"
+    depends_on:
+      - v3-h1-metrics-endpoint
+      - v3-f1-context-index
+    acceptance:
+      - "python -m pytest tests/test_tracing.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 240000
+      max_cost_usd: 0.80
+    gate: wave-h
+    # extra [otel]: opentelemetry-sdk; trace=прогон, span=фаза задачи (атрибуты:
+    # модель, токены, exit-коды); без extra — no-op. alerts.webhook_url: POST
+    # на blocked/failed/per-day-кап с кратким контекстом; mock-сервер в тестах.
