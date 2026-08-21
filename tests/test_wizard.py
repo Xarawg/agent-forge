@@ -179,3 +179,13 @@ def test_wizard_accepts_bare_task_list(cfg, target: Path) -> None:
     out = run_wizard(cfg, client, target, "задача", check=False)
     assert "валиден" in out
     assert load_tasks(target / OUT_NAME).tasks
+
+
+def test_normalize_dir_scope_gets_glob() -> None:
+    """scope `dir/` → `dir/**`, иначе coder не сможет писать (glob_to_regex)."""
+    raw = {"tasks": [{"id": "t1", "title": "x", "spec_ref": "s",
+                      "scope_paths": ["calc/", "calc.py", "tests/"],
+                      "acceptance": ["python -m pytest -q"]}]}
+    tasks, warnings = _normalize(raw, get_profile("normal"), [])
+    assert tasks[0]["scope_paths"] == ["calc/**", "calc.py", "tests/**"]
+    assert any("нормализован" in w for w in warnings)

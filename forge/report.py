@@ -44,6 +44,8 @@ def build_report(runs_dir: Path, run_id: str) -> RunReport:
     journal = Journal(runs_dir, run_id)
     report = RunReport(run_id=run_id, meta=journal.read_meta())
     for state_path in sorted((journal.run_dir / "tasks").glob("*.json")):
+        if ".history" in state_path.name:
+            continue  # снапшоты диалога (AF-12) — не состояния задач
         state = journal.task_state(state_path.stem)
         report.tasks.append(
             TaskReport(

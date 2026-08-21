@@ -78,6 +78,8 @@ def list_runs(runs_dir: Path) -> list[dict[str, Any]]:
         tasks_dir = run_dir / "tasks"
         if tasks_dir.is_dir():
             for state_path in sorted(tasks_dir.glob("*.json")):
+                if ".history" in state_path.name:
+                    continue  # снапшоты диалога (AF-12) — не состояния задач
                 state = str(_read_json(state_path).get("state", "queued"))
                 states[state] = states.get(state, 0) + 1
         total_cost = round(sum(float(e.get("cost_usd", 0.0) or 0.0) for e in _read_events(run_dir)), 6)
@@ -120,6 +122,8 @@ def run_detail(runs_dir: Path, run_id: str) -> dict[str, Any] | None:
     tasks_dir = run_dir / "tasks"
     if tasks_dir.is_dir():
         for state_path in sorted(tasks_dir.glob("*.json")):
+            if ".history" in state_path.name:
+                continue  # снапшоты диалога (AF-12) — не состояния задач
             st = _read_json(state_path)
             task_id = str(st.get("id", state_path.stem))
             extra = info.get(task_id, {})

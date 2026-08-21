@@ -75,3 +75,20 @@ tasks:
     runner.run(tasks, run_id=run_id)  # resume
     assert journal.task_state("next-task").state == "done"
     assert "gated-task" in journal.accepted_tasks()
+
+
+def test_accept_overrides_blocked(runner: Runner, cfg, tmp_path: Path) -> None:
+    """Override гейта №3: blocked/failed-задачу владелец может принять вручную,
+    иначе кап бюджета делает её вечным тупиком при resume."""
+    tasks = write_tasks(tmp_path, TASK_OK)
+    run_id = runner.run(tasks)
+    journal = Journal(cfg.runs_dir, run_id)
+
+    state = journal.task_state("task-ok")
+    state.state = "blocked"
+    journal.set_task_state(state, note="per-task кап токенов исчерпан")
+
+    runner.accept(run_id, "task-ok")
+    assert journal.task_state("task-ok").state == "done"
+    assert "override" in journal.task_state("task-ok").note
+    assert "task-ok" in journal.accepted_tasks()

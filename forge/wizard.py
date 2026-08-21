@@ -53,6 +53,22 @@ def _planner_prompt(intent: str, scan_summary: str) -> list[dict[str, str]]:
     ]
 
 
+def _fix_dir_scopes(task: dict[str, Any], warnings: list[str]) -> None:
+    """Маска каталога `dir/` матчит только сам каталог (glob_to_regex) — coder
+    получил бы SCOPE_VIOLATION на каждой записи. Нормализуем в `dir/**`."""
+    fixed: list[str] = []
+    for pattern in task.get("scope_paths") or []:
+        p = str(pattern)
+        if p.endswith("/"):
+            p = p + "**"
+            warnings.append(
+                f"⚠ {task.get('id', '?')}: scope-каталог нормализован в маску: {pattern!r} → {p!r}"
+            )
+        fixed.append(p)
+    if fixed:
+        task["scope_paths"] = fixed
+
+
 def _normalize(
     raw: Any, profile: Profile, scan_commands: list[str]
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -65,6 +81,7 @@ def _normalize(
         if not isinstance(item, dict):
             continue
         task = dict(item)
+        _fix_dir_scopes(task, warnings)
         budget = dict(task.get("budget") or {})
         budget.setdefault("max_tokens", profile.task_max_tokens)
         budget.setdefault("max_cost_usd", round(profile.task_max_cost_usd, 2))

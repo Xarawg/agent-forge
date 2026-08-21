@@ -45,3 +45,20 @@ def test_plain_empty_run(cfg) -> None:
     run_id = _run_with_states(cfg.runs_dir, [])
     text = render_plain(build_report(cfg.runs_dir, run_id))
     assert "Задач в прогоне нет" in text
+
+
+def test_history_snapshots_are_not_task_states(cfg) -> None:
+    """Снапшоты диалога (AF-12) лежат в tasks/ рядом с состояниями — отчёт
+    обязан их игнорировать (баг найден живым kill'ом прогона 2026-08-21)."""
+    run_id = _run_with_states(cfg.runs_dir, [("t1-ok", "done", "")])
+    history = cfg.runs_dir / run_id / "tasks" / "t1-ok.coder.history.json"
+    history.write_text('{"steps": 3, "messages": []}', encoding="utf-8")
+    report = build_report(cfg.runs_dir, run_id)  # не падает
+    assert [t.task_id for t in report.tasks] == ["t1-ok"]
+
+    from forge.ui import list_runs, run_detail
+
+    runs = list_runs(cfg.runs_dir)
+    assert runs[0]["states"] == {"done": 1}  # history не посчитан как задача
+    detail = run_detail(cfg.runs_dir, run_id)
+    assert detail is not None and len(detail["tasks"]) == 1

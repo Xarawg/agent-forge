@@ -324,9 +324,19 @@ class Runner:
         self._git("commit", "-m", f'"forge: {task.id} — {task.title}"')
 
     def accept(self, run_id: str, task_id: str) -> None:
-        """Человеческий гейт №3: фиксация приёмки + локальный merge ветки задачи."""
+        """Человеческий гейт №3: фиксация приёмки + локальный merge ветки задачи.
+
+        Override: задачу в состоянии blocked/failed владелец может принять вручную —
+        иначе кап бюджета делает её вечным тупиком (токены копятся между resume).
+        """
         journal = Journal(self.cfg.runs_dir, run_id)
         journal.accept_task(task_id)
+        state = journal.task_state(task_id)
+        if state.state in ("blocked", "failed"):
+            state.state = "done"
+            journal.set_task_state(
+                state, note=f"принято вручную владельцем (override; было: {state.note})"
+            )
         if self._is_git_repo():
             code, out = self._git("merge", "--no-ff", f"forge/{task_id}")
             journal.event(task_id=task_id, phase="gate", command=f"git merge forge/{task_id}",
