@@ -117,17 +117,30 @@ Semantics:
   step exhaustion/iterations → `failed`.
 - **gate**: after a task with `gate` label reaches `done`, run pauses until explicit `forge accept <id>` (human gate #3: accept records acceptance and locally merges `forge/<id>` branch). Continuation — `forge resume <run_id>`.
   Gate holds only `done` tasks: `failed` does not block wave (by design).
-- **resume**: `forge run`/`resume` skips `done` tasks; dialogue snapshots `tasks/<id>.<phase>.history.json` allow continuing a task killed mid-phase with context and preserved step counter.
+  **Owner override**: `forge accept` on a `blocked`/`failed` task marks it `done` with an `override` note in the journal — otherwise a task that hit a cumulative per-task token cap could never recover, since tokens accumulate across resumes.
+- **resume**: `forge run`/`resume` skips `done` tasks; dialogue snapshots `tasks/<id>.<phase>.history.json` allow continuing a task killed mid-phase with context and preserved step counter. History snapshots are not task states — `status`/UI/report ignore them.
 - **acceptance** is executed by runner as-is (shell, cwd = target repo root, 300s timeout per command) — tool whitelist does NOT apply.
 
-## 5. prompts/ — Prompt Library
+## 5. Onboarding Commands (init / wizard / lint / dry-run / recipes)
+
+Everything here prepares or validates a run **before** money is spent; the draft is always confirmed by a human (gate #1).
+
+- **`forge init [--target DIR] [--profile careful|normal|fast] [--force] [--no-check]`** — prepares a project in one command (`forge/init.py` + `forge/detect.py`): detects the stack (Python/Node/.NET — test commands, package files), inits git if absent, writes a skeleton `tasks.yaml` containing only the checks actually found, and runs a **baseline** (found checks on the untouched repo). Red baseline = honest stop signal: fix the project before agents.
+- **`forge wizard [--prompt "..." | --prompt-file F | --recipe NAME] [--profile ...] [--yes] [--out FILE] [--no-check] [--provider P]`** (`forge/wizard.py`) — drafts a complete setup from a plain-words prompt: repo scan → baseline → planner drafts tasks with scopes, acceptance (built from detected checks), profile budgets, and gates → cost forecast → `tasks.wizard.yaml`. If the request is ambiguous, the planner returns a `QUESTIONS:` block and the wizard asks interactively (`--yes` = defaults, non-interactive). Scope entries like `dir/` are normalized to `dir/**`.
+- **`forge wizard --recipe NAME`** — deterministic rendering of a recipe from `config/recipes/` (`feature`, `test-coverage`, `docs-sync`): asks the recipe's `questions`, substitutes answers into `{placeholders}`, **no LLM call ($0)**.
+- **`forge lint <tasks.yaml>`** (`forge/lint.py`) — pre-flight validation without running: contract errors (schema, DAG cycles, dangling deps) + advisor warnings on frozen acceptance (e.g. test commands that cannot pass at the task's position in the DAG).
+- **`forge run --dry-run`** (`forge/dryrun.py`) — cost forecast for the queue from `models.yaml` prices and per-task budgets; nothing executes, no journal is written.
+- **Cap profiles** (`forge/profiles.py`): `careful` — task ≤ $0.30, gate after every task (first runs, free models); `normal` — `models.yaml` defaults; `fast` — larger budgets, gates only at the end.
+- **UI draft editor**: `forge ui`, then `/wizard?file=<path-to-draft>` — renders the draft as editable task cards; confirming writes the YAML back to the same file. The UI is otherwise read-only.
+
+## 6. prompts/ — Prompt Library
 
 All prompt text — files in `prompts/`, not in code (SPEC §7):
 
 | File | Purpose |
 |---|---|
 | `00_system.md` | system prompt, shared across all roles |
-| `10_planner.md` | planner: SPEC → tasks.yaml draft (`forge import`) |
+| `10_planner.md` | planner: SPEC/prompt → tasks.yaml draft (`forge import`, `forge wizard`); may answer with a `QUESTIONS:` block when the request is ambiguous |
 | `20_codegen.md` | coder: loop rules, DONE/BLOCKED/GAP markers, commit prohibition |
 | `30_reviewer.md` | reviewer: review checklist, verdicts APPROVE/REWORK/REJECT |
 | `40_repair.md` | repair: fix per verdict, STUCK/DISPUTE markers |
@@ -136,12 +149,14 @@ All prompt text — files in `prompts/`, not in code (SPEC §7):
 
 Versioning: directory under git; library version is recorded in `run.json` (`prompts_version`) as git hash of last commit touching `prompts/` (outside git — sha256 of content; `forge/prompts.py:prompts_version`).
 
-## 6. Pointing forge at Another Project
+## 7. Pointing forge at Another Project
 
 ```bash
 pip install -e .            # in agent-forge repository
 forge run --tasks path/to/tasks.yaml --target /path/to/target-repo --spec path/to/SPEC.md
 ```
+
+Zero-YAML alternatives (see §5): `forge wizard --target /path/to/target-repo --prompt "..."` drafts the queue from plain words; `forge init --target ...` prepares a fresh/legacy project (stack detection, git, skeleton, baseline).
 
 - `--tasks` — task queue (see §4). Draft from spec: `forge import --spec SPEC.md --out tasks.draft.yaml`, then edit manually (gate #1).
 - `--target` — target repository root (default — current directory). All tool paths and acceptance commands are relative to it.
@@ -153,7 +168,7 @@ forge run --tasks path/to/tasks.yaml --target /path/to/target-repo --spec path/t
   - Dependencies are installed by owner in advance: `npm install`/`pip install` etc. are blocked at tool level (AF-10).
 - Run and UI are independent: `forge ui` reads `runs/` and works in parallel.
 
-## 7. Platform Notes
+## 8. Platform Notes
 
 - **Windows (reference, NFR-1)**: Git Bash; paths with spaces allowed. Child processes receive `ProgramFiles` / `ProgramFiles(x86)` / `ProgramW6432` defaults — without them NuGet/`dotnet` fail in stripped environments (`forge/tools.py:_WINDOWS_ENV_DEFAULTS`). Commands execute via `shell=True` (cmd semantics for runner and tools).
 - **Linux/macOS**: no peculiarities — pure Python, state on disk, no daemons. CI matrix (GitHub Actions) runs ubuntu + windows on Python 3.12/3.13.

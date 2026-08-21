@@ -1,6 +1,6 @@
 # SPEC — agent-forge: Agentic Code-Generation Infrastructure
 
-Version 1.2 · Self-specification of the tool (adapted from the original specification package; product/monorepo coupling removed). v1.2: NFR-2 amended (AF-14 server mode), v2/v3 roadmap references (§7).
+Version 1.3 · Self-specification of the tool (adapted from the original specification package; product/monorepo coupling removed). v1.2: NFR-2 amended (AF-14 server mode), v2/v3 roadmap references (§7). v1.3: FR-8 onboarding (init/wizard/lint/dry-run/recipes), FR-4 owner override in `forge accept`, `forge report --plain`, wizard draft editor in UI.
 
 ## 1. Goal
 
@@ -38,9 +38,9 @@ After coder: run task's `acceptance` commands (tests/lint/validators — trusted
 ### FR-4. Execution Control (for Owner)
 - Run journal: `runs/<run_id>/events.jsonl` — every event (model call, tokens, command, result).
 - Task states: `queued → running → validating → review → done | failed | blocked` (repair iteration = repeated `running`, counter in task state).
-- CLI commands: `forge status` (run task table), `forge log <task_id>`, `forge resume <run_id>` (continue after stop), `forge report` (summary: tokens, cost, duration).
-- Web UI `forge ui`: kanban board, task event log viewer, run report; read-only `runs/`.
-- Human gate #3: merge task branch — only via explicit `forge accept <task_id>`.
+- CLI commands: `forge status` (run task table), `forge log <task_id>`, `forge resume <run_id>` (continue after stop), `forge report` (summary: tokens, cost, duration; `--plain` — plain-language outcome: done / failed / what next).
+- Web UI `forge ui`: kanban board, task event log viewer, run report, wizard-draft editor (`/wizard?file=<draft>`); read-only `runs/` except the draft editor writing back the same draft file.
+- Human gate #3: merge task branch — only via explicit `forge accept <task_id>`. Owner override: `forge accept` on a `blocked`/`failed` task marks it `done` with an `override` note (a task that hit a cumulative per-task cap could otherwise never recover).
 
 ### FR-5. Budget Caps
 Per-task (max_tokens / max_cost_usd), per-run (max_cost_usd), per-day (max_cost_usd, sum across all `runs/*/events.jsonl` for current UTC day). Exceeding → task `blocked`, reason in journal. Provider limits (RPM/5xx) handled with exponential backoff (`retry` in models.yaml) and `fallback_models` preset fallback.
@@ -50,6 +50,15 @@ Per-task (max_tokens / max_cost_usd), per-run (max_cost_usd), per-day (max_cost_
 
 ### FR-7. Reproducibility
 Each run records in `run.json`: role models, prompts version (git hash of `prompts/`, outside git — sha256 of content), provider, mock flag. `forge report` includes run cost at config prices.
+
+### FR-8. Onboarding (Zero-YAML Entry)
+The owner can go from "a folder with a project" to a confirmed run without hand-writing `tasks.yaml`:
+- `forge init` — target-project preparation: stack detection (`forge/detect.py`: Python/Node/.NET test commands and package files), git init if absent, skeleton `tasks.yaml` containing only the checks actually found, and a **baseline** run of those checks on the untouched repo. A red baseline is a stop signal shown before any model call.
+- `forge wizard` — drafts a complete setup (`tasks.wizard.yaml`: tasks, scopes, acceptance from detected checks, profile budgets, gates) from a plain-words `--prompt` / `--prompt-file`; on an ambiguous request the planner answers with a `QUESTIONS:` block and the wizard asks interactively (`--yes` = defaults). Prints a cost forecast before anything runs.
+- `forge wizard --recipe NAME` — deterministic rendering of `config/recipes/*.yaml` (`feature`, `test-coverage`, `docs-sync`) with `{placeholder}` substitution; no LLM call.
+- Cap profiles (`careful` / `normal` / `fast`) preset per-task budgets and gate density; default is `careful`.
+- Pre-flight: `forge lint <tasks.yaml>` (contract errors + frozen-acceptance advice) and `forge run --dry-run` (queue cost forecast; nothing executes).
+- Every draft is confirmed by a human before launch (gate #1) — in the terminal or as task cards in the UI (`/wizard?file=<draft>`).
 
 ## 4. Non-Functional Requirements
 

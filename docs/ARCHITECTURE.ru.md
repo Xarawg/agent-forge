@@ -1,6 +1,6 @@
 # ARCHITECTURE — agent-forge
 
-Версия 0.1 · 19.08.2026 · По спецификации `docs/design/specs/agent-forge/SPEC.md` v1.0.
+Версия 0.2 · 21.08.2026 · По спецификации `docs/SPEC.md` v1.3.
 
 ## Обзор
 
@@ -33,7 +33,7 @@ tasks.yaml ──load_tasks──► DAG (topo_order)
 
 | Модуль | Ответственность |
 |---|---|
-| `cli.py` | argparse: run / resume / status / log / report / accept / import |
+| `cli.py` | argparse: run / resume / status / log / report / init / wizard / lint / accept / ui / import |
 | `config.py` | models.yaml + пресет провайдера + .env; сборка RoleConfig по ролям |
 | `models.py` | tasks.yaml: парсинг, валидация, DAG, состояния задач |
 | `llm.py` | `LLMClient`-протокол; `OpenAIClient` (retry/backoff, fallback-модели); `MockClient` |
@@ -41,8 +41,15 @@ tasks.yaml ──load_tasks──► DAG (topo_order)
 | `agents.py` | Цикл «модель ↔ инструменты»; одношаговый reviewer; маркеры |
 | `runner.py` | Оркестрация фаз, бюджеты, гейты, git |
 | `journal.py` | run.json, events.jsonl, tasks/<id>.json |
-| `report.py` | Сводки status/report из журнала |
+| `report.py` | Сводки status/report из журнала (вкл. `--plain`); игнорирует снапшоты `*.history.json` |
 | `prompts.py` | Загрузка/рендер промптов; версия библиотеки (git hash / sha256) |
+| `detect.py` | Определение стека целевого проекта: тестовые команды, файлы пакетов (Python/Node/.NET) |
+| `init.py` | `forge init`: git init, skeleton tasks.yaml из найденных проверок, baseline-прогон |
+| `wizard.py` | `forge wizard`: скан репо + baseline + черновик planner'а / рендер рецепта; интервью QUESTIONS; нормализация scope (`dir/` → `dir/**`) |
+| `profiles.py` | Профили капов `careful` / `normal` / `fast` (бюджеты + плотность гейтов) |
+| `lint.py` | `forge lint`: валидация контракта tasks.yaml + советчик по заморозке acceptance |
+| `dryrun.py` | `forge run --dry-run`: прогноз стоимости очереди без выполнения |
+| `ui.py` + `ui_static/` | Веб-UI только на чтение (stdlib http.server, без CDN): канбан, лог-вьюер, отчёт, редактор wizard-черновика |
 
 ## Ключевые механизмы
 
@@ -75,6 +82,17 @@ planner — валидный YAML-черновик. Сценарий `FORGE_MOCK
 после APPROVE — локальный коммит записанных файлов. `forge accept` мержит ветку
 локально (`--no-ff`). Push отсутствует как класс. Если target не git-репозиторий —
 фаза пропускается с записью в журнал.
+
+### Accept override (§FR-4)
+`forge accept` на задаче в `blocked`/`failed` переводит её в `done` с пометкой
+`override`. Без этого задача, упершаяся в кумулятивный per-task кап токенов, была
+вечным тупиком: токены копятся между resume, и предстартовая проверка бюджета
+блокировала бы каждый повтор до вызова модели.
+
+### Снапшоты истории (NFR-2)
+После каждого шага агента диалог снапшотится в `tasks/<id>.<phase>.history.json`;
+resume продолжает убитую посреди фазы задачу с контекстом и сохранённым счётчиком
+шагов. Эти файлы — не состояния задач: report/UI/status пропускают их по имени.
 
 ## Журнал (§5)
 

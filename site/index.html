@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent-forge</title>
-<meta name="description" content="Controlled, serial LLM code generation with test gates, review loops, and hard budget caps.">
+<meta name="description" content="Controlled, serial LLM code generation with test gates, review loops, hard budget caps and zero-YAML onboarding.">
 <style>
   /* === Design Tokens === */
   :root {
@@ -104,6 +104,7 @@
     content: ""; flex: 1; height: var(--line-weight);
     background: var(--border);
   }
+  .lead { font-size: 18px; color: var(--text-dim); }
 
   /* === Hero: flush-left === */
   .hero {
@@ -125,7 +126,7 @@
     to { opacity: 1; transform: translateY(0); }
   }
   .hero p.lead {
-    font-size: 20px; color: var(--text-dim); max-width: 520px;
+    font-size: 20px; color: var(--text-dim); max-width: 560px;
     line-height: 1.55; margin-bottom: 40px;
   }
   .hero .cta-row { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -185,7 +186,7 @@
     display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
   }
   .demo-col {
-    min-width: 160px; flex: 1; background: var(--bg-raised);
+    min-width: 150px; flex: 1; background: var(--bg-raised);
     border: 1px solid var(--border); border-radius: var(--radius-sharp);
     min-height: 180px;
   }
@@ -205,6 +206,7 @@
   .demo-card.done { border-left-color: var(--success); }
   .demo-card.failed { border-left-color: var(--danger); }
   .demo-card.repair { border-left-color: var(--warning); }
+  .demo-card.blocked { border-left-color: var(--warning); }
   .demo-controls { display: flex; gap: 10px; justify-content: center; margin: 24px 0 12px; flex-wrap: wrap; }
   .demo-step-info { text-align: center; color: var(--text-dim); font-size: 14px; min-height: 22px; }
   .demo-log {
@@ -217,7 +219,7 @@
   @keyframes fadeIn { from {opacity:0} to {opacity:1} }
 
   /* Scenario tabs */
-  .scenario-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+  .scenario-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
   .scenario-tab {
     padding: 8px 20px; border-radius: var(--radius-sharp); font-size: 13px;
     font-weight: 600; cursor: pointer; border: 1px solid var(--border);
@@ -270,13 +272,15 @@
     border-radius: var(--radius-sharp); padding: 20px;
     font: 13px/1.7 var(--font-mono);
     box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    overflow-x: auto;
   }
-  .terminal .line { margin: 2px 0; }
+  .terminal .line { margin: 2px 0; white-space: nowrap; }
   .terminal .p { color: var(--success); }
   .terminal .c { color: var(--text); }
   .terminal .o { color: var(--text-dim); }
   .terminal .ok { color: var(--success); }
   .terminal .er { color: var(--danger); }
+  .terminal .wn { color: var(--warning); }
 
   /* Cards */
   .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; }
@@ -287,15 +291,36 @@
   .grid-3 .card:hover { background: var(--surface); border-color: #333; }
   .card h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
   .card p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+  .card .tag {
+    display: inline-block; font: 600 10px var(--font-mono); color: var(--accent);
+    border: 1px solid var(--accent); border-radius: var(--radius-pill);
+    padding: 2px 10px; margin-bottom: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
 
-  /* Use case cards */
-  .use-case {
+  /* Scenario walkthrough blocks */
+  .walk {
+    display: grid; grid-template-columns: 1fr 1.2fr; gap: 32px;
     background: var(--bg-raised); border: 1px solid var(--border);
     border-radius: var(--radius-sharp); padding: 32px;
-    margin-bottom: 16px;
+    margin-bottom: 20px; align-items: start;
   }
-  .use-case h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-  .use-case p { color: var(--text-dim); font-size: 15px; }
+  .walk h3 { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+  .walk h3 .idx { color: var(--accent); font-family: var(--font-mono); font-size: 13px; margin-right: 8px; }
+  .walk p { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; }
+  .walk .terminal { box-shadow: none; font-size: 12.5px; }
+
+  /* Commands table */
+  .cmd-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .cmd-table td {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .cmd-table tr:hover td { background: var(--bg-raised); }
+  .cmd-table td:first-child {
+    font-family: var(--font-mono); font-size: 13px; color: var(--text);
+    white-space: nowrap; width: 46%;
+  }
+  .cmd-table td:last-child { color: var(--text-dim); }
 
   /* Footer */
   footer {
@@ -320,6 +345,8 @@
     .pipeline-strip { flex-direction: column; }
     .pipe-item { border-right: none; border-bottom: 1px solid var(--border); }
     .demo-board { flex-direction: column; }
+    .walk { grid-template-columns: 1fr; }
+    .cmd-table td:first-child { white-space: normal; }
     footer .footer-grid { grid-template-columns: 1fr 1fr; }
   }
 </style>
@@ -330,8 +357,9 @@
   <div class="logo">agent<span>-</span>forge</div>
   <div class="links">
     <a href="#demo" data-i18n="nav_demo">Demo</a>
+    <a href="#scenarios" data-i18n="nav_scen">Start here</a>
     <a href="#how" data-i18n="nav_how">How it works</a>
-    <a href="#usecases" data-i18n="nav_use">Use cases</a>
+    <a href="#commands" data-i18n="nav_cmd">Commands</a>
     <a href="#start" data-i18n="nav_start">Quick start</a>
   </div>
   <button class="lang-switch" id="langSwitch">RU</button>
@@ -342,29 +370,30 @@
   <div class="container">
     <h1 id="heroTitle">Controlled LLM<br>Code Generation</h1>
     <p class="lead" data-i18n="hero_lead">
-      Run dozens of spec-driven coding tasks through LLM agents with real test gates,
+      Point it at any repository, say what you want in plain words, and get a confirmed
+      setup — tasks, tests, budgets — driven through LLM agents with real test gates,
       second-model review, hard budget caps, and a full on-disk audit trail.
     </p>
     <div class="cta-row">
       <a class="btn btn-primary" href="#start" data-i18n="btn_start">Get Started</a>
-      <a class="btn btn-ghost" href="#how" data-i18n="btn_learn">How it Works</a>
+      <a class="btn btn-ghost" href="#scenarios" data-i18n="btn_scen">Pick Your Scenario</a>
     </div>
 
     <div class="pipeline-strip" style="margin-top: 80px;">
       <div class="pipe-item">
         <div class="num">01</div>
         <h4 data-i18n="p1_title">Task Queue</h4>
-        <p data-i18n="p1_desc">DAG with scopes &amp; budgets</p>
+        <p data-i18n="p1_desc">Drafted by wizard or hand-written</p>
       </div>
       <div class="pipe-item">
         <div class="num">02</div>
         <h4 data-i18n="p2_title">Coder Agent</h4>
-        <p data-i18n="p2_desc">Writes code with tools</p>
+        <p data-i18n="p2_desc">Writes code with scoped tools</p>
       </div>
       <div class="pipe-item">
         <div class="num">03</div>
         <h4 data-i18n="p3_title">Validate</h4>
-        <p data-i18n="p3_desc">Tests &amp; linters</p>
+        <p data-i18n="p3_desc">Real tests &amp; linters</p>
       </div>
       <div class="pipe-item">
         <div class="num">04</div>
@@ -374,7 +403,12 @@
       <div class="pipe-item">
         <div class="num">05</div>
         <h4 data-i18n="p5_title">Repair</h4>
-        <p data-i18n="p5_desc">Fix or fail visibly</p>
+        <p data-i18n="p5_desc">Fix, dispute or fail visibly</p>
+      </div>
+      <div class="pipe-item">
+        <div class="num">06</div>
+        <h4 data-i18n="p6_title">Human Gate</h4>
+        <p data-i18n="p6_desc">You accept, then resume</p>
       </div>
     </div>
   </div>
@@ -391,7 +425,7 @@
 <section id="demo">
   <div class="container">
     <div class="section-label"><span data-i18n="demo_label">Pipeline Demo · Simulated</span></div>
-    <p class="lead" style="max-width:600px; margin:0 0 40px;" data-i18n="demo_subtitle">
+    <p class="lead" style="max-width:640px; margin:0 0 40px;" data-i18n="demo_subtitle">
       A scripted walkthrough — no live API calls. Click <strong>Next Step</strong> to walk a task through the pipeline; real runs log the same events to <code>runs/&lt;id&gt;/events.jsonl</code>.
     </p>
 
@@ -412,6 +446,10 @@
         <h4>👁️ Review</h4>
         <div class="dropzone" id="col-review"></div>
       </div>
+      <div class="demo-col" data-state="blocked">
+        <h4>🚧 Blocked</h4>
+        <div class="dropzone" id="col-blocked"></div>
+      </div>
       <div class="demo-col" data-state="done">
         <h4>🎉 Done</h4>
         <div class="dropzone" id="col-done"></div>
@@ -421,6 +459,7 @@
     <div class="scenario-tabs">
       <div class="scenario-tab active" data-scenario="happy" data-i18n="tab_happy">✅ Happy Path</div>
       <div class="scenario-tab" data-scenario="repair" data-i18n="tab_repair">🔧 Repair Loop</div>
+      <div class="scenario-tab" data-scenario="dispute" data-i18n="tab_dispute">⚖️ Dispute → Human Gate</div>
     </div>
 
     <div class="demo-controls">
@@ -436,6 +475,100 @@
   </div>
 </section>
 
+<!-- Start from any project -->
+<section id="scenarios" style="background:#0d0d0d;">
+  <div class="container">
+    <div class="section-label"><span data-i18n="scen_label">Start From Any Project</span></div>
+    <p class="lead" style="max-width:680px; margin:0 0 48px;" data-i18n="scen_subtitle">
+      Four entry points, one tool. Every path ends the same way: a confirmed task queue,
+      a forecasted cost, and agents behind test gates.
+    </p>
+
+    <div class="walk">
+      <div>
+        <h3><span class="idx">A</span><span data-i18n="wa_title">New project — empty folder, no code, no specs</span></h3>
+        <p data-i18n="wa_p">
+          <code>forge init</code> prepares the directory (stack detection, git, baseline checks).
+          <code>forge wizard</code> scans it, asks a clarifying question or two if your request is
+          ambiguous, and drafts the whole setup with a cost forecast. You confirm the draft — that's
+          gate #1 — and run. With the default <code>careful</code> profile every task pauses for your
+          <code>forge accept</code>.
+        </p>
+      </div>
+      <div class="terminal">
+        <div class="line"><span class="p">$</span> <span class="c">forge init --target ./new-project</span></div>
+        <div class="line o">[init] stack: python · git initialized · baseline green</div>
+        <div class="line"><span class="p">$</span> <span class="c">forge wizard --target ./new-project \</span></div>
+        <div class="line c">&nbsp;&nbsp;--prompt "CLI calculator: package calc, python -m calc 2 3, pytest tests"</div>
+        <div class="line o">[wizard] 4 tasks drafted · forecast ≈ $0.20 → tasks.wizard.yaml</div>
+        <div class="line"><span class="p">$</span> <span class="c">forge run --tasks ./new-project/tasks.wizard.yaml --target ./new-project</span></div>
+        <div class="line"><span class="p">$</span> <span class="c">forge accept init-package &amp;&amp; forge resume run-…</span></div>
+        <div class="line"><span class="p">$</span> <span class="c">forge report --plain</span></div>
+        <div class="line ok">[done] 4 of 4 tasks · $0.16 · 2 repairs</div>
+      </div>
+    </div>
+
+    <div class="walk">
+      <div>
+        <h3><span class="idx">B</span><span data-i18n="wb_title">Legacy project — lots of code, no spec, no AGENTS.md</span></h3>
+        <p data-i18n="wb_p">
+          The wizard reads the tree, finds the real test commands, and runs them as a baseline
+          before any model call — a red baseline is an honest stop, not a surprise mid-run.
+          Recipes (<code>config/recipes/</code>) draft a queue deterministically, with zero LLM
+          cost: <code>test-coverage</code> is the safest first move on legacy code.
+        </p>
+      </div>
+      <div class="terminal">
+        <div class="line"><span class="p">$</span> <span class="c">forge wizard --target ./legacy --recipe test-coverage</span></div>
+        <div class="line o">[recipe] module path? → src/auth · test command? → python -m pytest -q</div>
+        <div class="line o">[wizard] draft ready · no LLM call · $0</div>
+        <div class="line"><span class="p">$</span> <span class="c">forge lint ./legacy/tasks.wizard.yaml</span></div>
+        <div class="line ok">[lint] contract OK · 1 advice: freeze acceptance versions</div>
+        <div class="line"><span class="p">$</span> <span class="c">forge run --tasks ./legacy/tasks.wizard.yaml --target ./legacy</span></div>
+      </div>
+    </div>
+
+    <div class="walk">
+      <div>
+        <h3><span class="idx">C</span><span data-i18n="wc_title">Documented project — AGENTS.md, SPEC.md, canon/ docs</span></h3>
+        <p data-i18n="wc_p">
+          What's already written gets used. <code>AGENTS.md</code> in the target root goes straight
+          into the coder's context; <code>forge import</code> turns an existing SPEC.md into a task
+          draft via the planner; <code>--spec</code> attaches a spec excerpt to every task prompt and
+          <code>canon_snapshot</code> pins a canonical decisions file. <code>canon/</code> is always
+          read-only for agents.
+        </p>
+      </div>
+      <div class="terminal">
+        <div class="line"><span class="p">$</span> <span class="c">forge import --spec ./project/SPEC.md --out tasks.draft.yaml</span></div>
+        <div class="line o">[planner] 6 tasks drafted from SPEC.md — review before launch (gate #1)</div>
+        <div class="line"><span class="p">$</span> <span class="c">forge lint tasks.draft.yaml</span></div>
+        <div class="line"><span class="p">$</span> <span class="c">forge run --tasks tasks.draft.yaml \</span></div>
+        <div class="line c">&nbsp;&nbsp;--target ./project --spec ./project/SPEC.md</div>
+      </div>
+    </div>
+
+    <div class="walk">
+      <div>
+        <h3><span class="idx">D</span><span data-i18n="wd_title">Hands-on — your own tasks.yaml, full control</span></h3>
+        <p data-i18n="wd_p">
+          Write the queue yourself: DAG dependencies, gitignore-like scopes, shell acceptance
+          commands, per-task budgets, milestone gates. <code>forge lint</code> validates the contract
+          before you spend anything, <code>--dry-run</code> prints the cost forecast, and the read-only
+          UI gives you a kanban while the run is going.
+        </p>
+      </div>
+      <div class="terminal">
+        <div class="line"><span class="p">$</span> <span class="c">forge lint tasks.yaml</span></div>
+        <div class="line"><span class="p">$</span> <span class="c">forge run --tasks tasks.yaml --dry-run</span></div>
+        <div class="line o">[dry-run] 5 tasks · worst-case $1.40 · nothing executed</div>
+        <div class="line"><span class="p">$</span> <span class="c">forge run --tasks tasks.yaml --target ./repo</span></div>
+        <div class="line"><span class="p">$</span> <span class="c">forge ui</span> <span class="o"># kanban on http://127.0.0.1:8765</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- How it works -->
 <section id="how">
   <div class="container">
@@ -443,16 +576,17 @@
 
     <div class="feature-row">
       <div class="text">
-        <h3 data-i18n="how_1_title">1. Define Your Tasks</h3>
+        <h3 data-i18n="how_1_title">1. Get a Task Queue — Drafted or Hand-Written</h3>
         <p data-i18n="how_1_p">
-          Write a <code>tasks.yaml</code> queue: each task has a scope, acceptance commands,
-          budget caps, and dependencies. The planner can draft it from your SPEC.md.
+          Describe the work in plain words and the wizard drafts <code>tasks.yaml</code> for you —
+          or write it yourself, or import it from a SPEC.md. Either way a human confirms
+          the draft before anything runs.
         </p>
         <ul>
-          <li data-i18n="how_1_l1">Gitignore-like scope paths</li>
-          <li data-i18n="how_1_l2">Shell acceptance commands</li>
-          <li data-i18n="how_1_l3">Per-task token &amp; USD budgets</li>
-          <li data-i18n="how_1_l4">DAG dependencies with topo-order</li>
+          <li data-i18n="how_1_l1">Wizard: repo scan + baseline + clarifying questions + cost forecast</li>
+          <li data-i18n="how_1_l2">Recipes render deterministically — no LLM call, $0</li>
+          <li data-i18n="how_1_l3">Lint catches contract errors and fragile acceptance before launch</li>
+          <li data-i18n="how_1_l4">Edit the draft as task cards in the browser UI</li>
         </ul>
       </div>
       <div class="visual">
@@ -464,7 +598,8 @@
     <span class="kw">acceptance</span>:
       - <span class="str">"cd tools-ts && npm test"</span>
     <span class="kw">budget</span>:
-      <span class="kw">max_cost_usd</span>: <span class="num">0.50</span></code></pre>
+      <span class="kw">max_cost_usd</span>: <span class="num">0.50</span>
+    <span class="kw">gate</span>: <span class="str">milestone-1</span></code></pre>
         </div>
       </div>
     </div>
@@ -500,13 +635,14 @@
       <div class="text">
         <h3 data-i18n="how_3_title">3. Human Gate Before Merge</h3>
         <p data-i18n="how_3_p">
-          Nothing merges automatically. When a task reaches <code>done</code>,
-          the run pauses until you explicitly accept it.
+          Nothing merges automatically. When a gated task reaches <code>done</code>,
+          the run pauses until you explicitly accept it. A task stuck on a budget cap
+          or a dispute can also be accepted as an explicit owner override.
         </p>
         <ul>
-          <li data-i18n="how_3_l1"><code>forge accept &lt;task-id&gt;</code> merges branch</li>
+          <li data-i18n="how_3_l1"><code>forge accept &lt;task-id&gt;</code> merges branch — or overrides blocked/failed</li>
           <li data-i18n="how_3_l2"><code>forge resume</code> continues queue</li>
-          <li data-i18n="how_3_l3">Runs resumable from disk snapshots</li>
+          <li data-i18n="how_3_l3">Runs resumable from disk snapshots, kill the process any time</li>
           <li data-i18n="how_3_l4">Full journal in <code>runs/&lt;id&gt;/events.jsonl</code></li>
         </ul>
       </div>
@@ -525,8 +661,28 @@ $ <span class="kw">forge</span> resume run-20260820-080204
   </div>
 </section>
 
+<!-- Commands reference -->
+<section id="commands" style="background:#0d0d0d;">
+  <div class="container">
+    <div class="section-label"><span data-i18n="cmd_label">Command Reference</span></div>
+    <table class="cmd-table">
+      <tr><td>forge init [--target DIR] [--profile careful|normal|fast]</td><td data-i18n="cmd_init">Prepare a project: stack detection, git init, skeleton tasks.yaml, baseline checks</td></tr>
+      <tr><td>forge wizard --prompt "..." [--recipe NAME] [--yes]</td><td data-i18n="cmd_wizard">Draft tasks, acceptance, budgets and gates from plain words or a recipe; asks clarifying questions; prints a cost forecast</td></tr>
+      <tr><td>forge import --spec SPEC.md [--out FILE]</td><td data-i18n="cmd_import">Draft a task queue from an existing specification via the planner</td></tr>
+      <tr><td>forge lint tasks.yaml</td><td data-i18n="cmd_lint">Pre-flight validation: contract errors + frozen-acceptance advice</td></tr>
+      <tr><td>forge run --tasks F [--target DIR] [--spec S] [--dry-run]</td><td data-i18n="cmd_run">Run the queue; --dry-run prints a cost forecast and executes nothing</td></tr>
+      <tr><td>forge resume &lt;run_id&gt;</td><td data-i18n="cmd_resume">Continue a stopped or paused run from on-disk history snapshots</td></tr>
+      <tr><td>forge status [run_id]</td><td data-i18n="cmd_status">Task table: state, tokens, cost, repairs, notes</td></tr>
+      <tr><td>forge log &lt;task-id&gt;</td><td data-i18n="cmd_log">Full event journal of one task</td></tr>
+      <tr><td>forge report [run_id] [--plain]</td><td data-i18n="cmd_report">Cost/token summary; --plain — human-readable outcome and next steps</td></tr>
+      <tr><td>forge accept &lt;task-id&gt;</td><td data-i18n="cmd_accept">Human gate #3: accept a done task (merge branch); manual override for blocked/failed</td></tr>
+      <tr><td>forge ui [--port 8765]</td><td data-i18n="cmd_ui">Read-only web dashboard: kanban, log viewer, cost report, wizard-draft editor at /wizard?file=…</td></tr>
+    </table>
+  </div>
+</section>
+
 <!-- Use cases -->
-<section id="usecases" style="background:#0d0d0d;">
+<section id="usecases">
   <div class="container">
     <div class="section-label"><span data-i18n="use_label">Use Cases</span></div>
 
@@ -560,36 +716,40 @@ $ <span class="kw">forge</span> resume run-20260820-080204
 </section>
 
 <!-- Quick start -->
-<section id="start">
+<section id="start" style="background:#0d0d0d;">
   <div class="container">
     <div class="section-label"><span data-i18n="start_label">Quick Start</span></div>
 
     <div class="code-block">
       <div class="head"><span class="dot" style="background:#ff5f56"></span><span class="dot" style="background:#ffbd2e"></span><span class="dot" style="background:#27c93f"></span>bash</div>
-      <pre><code><span class="cm"># 1. Install</span>
+      <pre><code><span class="cm"># 1. Install from GitHub (Python ≥ 3.12)</span>
+git clone https://github.com/Xarawg/agent-forge.git
+cd agent-forge
+python -m venv .venv &amp;&amp; source .venv/Scripts/activate  <span class="cm"># .venv/bin/activate on Linux/macOS</span>
 pip install -e .
 
-<span class="cm"># 2. Try mock mode (no API key)</span>
-FORGE_MOCK=1 forge run \
-  --tasks config/tasks.example.yaml \
-  --target /path/to/any/dir
+<span class="cm"># 2. Verify in mock mode — no API key needed</span>
+FORGE_MOCK=1 pytest -q
+FORGE_MOCK=1 forge run --tasks config/tasks.example.yaml --target /tmp/demo
+forge status &amp;&amp; forge report --plain
 
-forge status
-forge report
+<span class="cm"># 3. Point it at your project (any state: empty, legacy, documented)</span>
+forge init --target /path/to/project
+forge wizard --target /path/to/project --prompt "what you want, in plain words"
+<span class="cm"># review the draft → tasks.wizard.yaml (gate #1 is you)</span>
 
-<span class="cm"># 3. Real run</span>
-cp .env.example .env
-<span class="cm"># edit .env: DEEPSEEK_API_KEY=sk-...</span>
-
-forge run --tasks tasks.yaml --target ./my-repo --spec SPEC.md
-forge accept my-task-1
-forge resume</code></pre>
+<span class="cm"># 4. Real run — add a provider key to .env first (DeepSeek, OpenRouter, Ollama)</span>
+forge run --tasks /path/to/project/tasks.wizard.yaml --target /path/to/project
+forge accept &lt;task-id&gt;   <span class="cm"># human gate, then</span>
+forge resume &lt;run_id&gt;
+forge report --plain       <span class="cm"># plain-language outcome</span>
+forge ui                   <span class="cm"># kanban on http://127.0.0.1:8765</span></code></pre>
     </div>
   </div>
 </section>
 
 <!-- Why -->
-<section id="why" style="background:#0d0d0d;">
+<section id="why">
   <div class="container">
     <div class="section-label"><span data-i18n="why_label">Why agent-forge?</span></div>
 
@@ -604,7 +764,7 @@ forge resume</code></pre>
       </div>
       <div class="card">
         <h3 data-i18n="why_3_title">Second Model Review</h3>
-        <p data-i18n="why_3_p">A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop.</p>
+        <p data-i18n="why_3_p">A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop (≤3 iterations).</p>
       </div>
       <div class="card">
         <h3 data-i18n="why_4_title">Full Audit Trail</h3>
@@ -617,6 +777,18 @@ forge resume</code></pre>
       <div class="card">
         <h3 data-i18n="why_6_title">Any Provider</h3>
         <p data-i18n="why_6_p">DeepSeek, OpenRouter free tiers, local Ollama, or your own endpoint. Presets are YAML — no code changes.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_7_title">Honest Stops</h3>
+        <p data-i18n="why_7_p">DISPUTE / STUCK / BLOCKED markers halt a task visibly when spec and reality disagree — a human resolves contradictions, never the model.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_8_title">Resumable Runs</h3>
+        <p data-i18n="why_8_p">Dialogue history is snapshotted after every agent step. Kill the process, reboot, come back tomorrow — <code>forge resume</code> picks up mid-task with context intact.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="why_9_title">Plain-Language Reports</h3>
+        <p data-i18n="why_9_p"><code>forge report --plain</code> answers three questions — what got done, what failed, what to do next — without reading a single YAML file.</p>
       </div>
     </div>
   </div>
@@ -632,20 +804,20 @@ forge resume</code></pre>
       </div>
       <div>
         <h4 data-i18n="footer_docs">Docs</h4>
-        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/SPEC.md">Specification</a>
-        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/CONFIGURATION.md">Configuration</a>
-        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/ARCHITECTURE.md">Architecture</a>
+        <a data-doc data-en="docs/SPEC.md" data-ru="docs/SPEC.ru.md" href="https://github.com/Xarawg/agent-forge/blob/master/docs/SPEC.md">Specification</a>
+        <a data-doc data-en="docs/CONFIGURATION.md" data-ru="docs/CONFIGURATION.ru.md" href="https://github.com/Xarawg/agent-forge/blob/master/docs/CONFIGURATION.md">Configuration</a>
+        <a data-doc data-en="docs/ARCHITECTURE.md" data-ru="docs/ARCHITECTURE.ru.md" href="https://github.com/Xarawg/agent-forge/blob/master/docs/ARCHITECTURE.md">Architecture</a>
       </div>
       <div>
         <h4 data-i18n="footer_project">Project</h4>
-        <a href="https://github.com/Xarawg/agent-forge#readme">README</a>
+        <a data-doc data-en="README.md" data-ru="README.ru.md" href="https://github.com/Xarawg/agent-forge#readme">README</a>
         <a href="https://github.com/Xarawg/agent-forge">GitHub</a>
         <a href="https://github.com/Xarawg/agent-forge/blob/master/LICENSE">License</a>
       </div>
       <div>
         <h4 data-i18n="footer_meta">Meta</h4>
-        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/DECISIONS.md">Decisions</a>
-        <a href="https://github.com/Xarawg/agent-forge/blob/master/docs/ANALYTICS.md">Analytics</a>
+        <a data-doc data-en="docs/DECISIONS.md" data-ru="docs/DECISIONS.ru.md" href="https://github.com/Xarawg/agent-forge/blob/master/docs/DECISIONS.md">Decisions</a>
+        <a data-doc data-en="docs/ANALYTICS.md" data-ru="docs/ANALYTICS.ru.md" href="https://github.com/Xarawg/agent-forge/blob/master/docs/ANALYTICS.md">Analytics</a>
         <a href="https://github.com/Xarawg/agent-forge/blob/master/SECURITY.md">Security</a>
       </div>
     </div>
@@ -657,25 +829,36 @@ forge resume</code></pre>
 /* ===== i18n ===== */
 const I18N = {
   en: {
-    nav_demo: "Demo", nav_how: "How it works", nav_use: "Use cases", nav_start: "Quick start",
-    hero_lead: "Run dozens of spec-driven coding tasks through LLM agents with real test gates, second-model review, hard budget caps, and a full on-disk audit trail.",
-    btn_start: "Get Started", btn_learn: "How it Works",
-    p1_title: "Task Queue", p1_desc: "DAG with scopes & budgets",
-    p2_title: "Coder Agent", p2_desc: "Writes code with tools",
-    p3_title: "Validate", p3_desc: "Tests & linters",
+    nav_demo: "Demo", nav_scen: "Start here", nav_how: "How it works", nav_cmd: "Commands", nav_start: "Quick start",
+    hero_lead: "Point it at any repository, say what you want in plain words, and get a confirmed setup — tasks, tests, budgets — driven through LLM agents with real test gates, second-model review, hard budget caps, and a full on-disk audit trail.",
+    btn_start: "Get Started", btn_scen: "Pick Your Scenario",
+    p1_title: "Task Queue", p1_desc: "Drafted by wizard or hand-written",
+    p2_title: "Coder Agent", p2_desc: "Writes code with scoped tools",
+    p3_title: "Validate", p3_desc: "Real tests & linters",
     p4_title: "Review", p4_desc: "Second model checks",
-    p5_title: "Repair", p5_desc: "Fix or fail visibly",
+    p5_title: "Repair", p5_desc: "Fix, dispute or fail visibly",
+    p6_title: "Human Gate", p6_desc: "You accept, then resume",
     demo_label: "Pipeline Demo · Simulated", demo_subtitle: "A scripted walkthrough — no live API calls. Click <strong>Next Step</strong> to walk a task through the pipeline; real runs log the same events to <code>runs/&lt;id&gt;/events.jsonl</code>.",
-    tab_happy: "✅ Happy Path", tab_repair: "🔧 Repair Loop",
+    tab_happy: "✅ Happy Path", tab_repair: "🔧 Repair Loop", tab_dispute: "⚖️ Dispute → Human Gate",
     btn_next: "▶ Next Step", btn_auto: "⏵ Auto Play", btn_reset: "↺ Reset",
     demo_info: "Press <strong>Next Step</strong> to start the pipeline.",
+    scen_label: "Start From Any Project",
+    scen_subtitle: "Four entry points, one tool. Every path ends the same way: a confirmed task queue, a forecasted cost, and agents behind test gates.",
+    wa_title: "New project — empty folder, no code, no specs",
+    wa_p: "forge init prepares the directory (stack detection, git, baseline checks). forge wizard scans it, asks a clarifying question or two if your request is ambiguous, and drafts the whole setup with a cost forecast. You confirm the draft — that's gate #1 — and run. With the default careful profile every task pauses for your forge accept.",
+    wb_title: "Legacy project — lots of code, no spec, no AGENTS.md",
+    wb_p: "The wizard reads the tree, finds the real test commands, and runs them as a baseline before any model call — a red baseline is an honest stop, not a surprise mid-run. Recipes (config/recipes/) draft a queue deterministically, with zero LLM cost: test-coverage is the safest first move on legacy code.",
+    wc_title: "Documented project — AGENTS.md, SPEC.md, canon/ docs",
+    wc_p: "What's already written gets used. AGENTS.md in the target root goes straight into the coder's context; forge import turns an existing SPEC.md into a task draft via the planner; --spec attaches a spec excerpt to every task prompt and canon_snapshot pins a canonical decisions file. canon/ is always read-only for agents.",
+    wd_title: "Hands-on — your own tasks.yaml, full control",
+    wd_p: "Write the queue yourself: DAG dependencies, gitignore-like scopes, shell acceptance commands, per-task budgets, milestone gates. forge lint validates the contract before you spend anything, --dry-run prints the cost forecast, and the read-only UI gives you a kanban while the run is going.",
     how_label: "How It Works",
-    how_1_title: "1. Define Your Tasks",
-    how_1_p: "Write a tasks.yaml queue: each task has a scope, acceptance commands, budget caps, and dependencies. The planner can draft it from your SPEC.md.",
-    how_1_l1: "Gitignore-like scope paths",
-    how_1_l2: "Shell acceptance commands",
-    how_1_l3: "Per-task token & USD budgets",
-    how_1_l4: "DAG dependencies with topo-order",
+    how_1_title: "1. Get a Task Queue — Drafted or Hand-Written",
+    how_1_p: "Describe the work in plain words and the wizard drafts tasks.yaml for you — or write it yourself, or import it from a SPEC.md. Either way a human confirms the draft before anything runs.",
+    how_1_l1: "Wizard: repo scan + baseline + clarifying questions + cost forecast",
+    how_1_l2: "Recipes render deterministically — no LLM call, $0",
+    how_1_l3: "Lint catches contract errors and fragile acceptance before launch",
+    how_1_l4: "Edit the draft as task cards in the browser UI",
     how_2_title: "2. Agent Loop with Guardrails",
     how_2_p: "The coder agent gets read_file, write_file, list_dir, and run_command — nothing else.",
     how_2_l1: "Writes locked to task scope paths",
@@ -683,11 +866,23 @@ const I18N = {
     how_2_l3: "npm install blocked at tool level",
     how_2_l4: "Violations logged as events",
     how_3_title: "3. Human Gate Before Merge",
-    how_3_p: "Nothing merges automatically. When a task reaches done, the run pauses until you explicitly accept it.",
-    how_3_l1: "forge accept <task-id> merges branch",
+    how_3_p: "Nothing merges automatically. When a gated task reaches done, the run pauses until you explicitly accept it. A task stuck on a budget cap or a dispute can also be accepted as an explicit owner override.",
+    how_3_l1: "forge accept <task-id> merges branch — or overrides blocked/failed",
     how_3_l2: "forge resume continues queue",
-    how_3_l3: "Runs resumable from disk snapshots",
+    how_3_l3: "Runs resumable from disk snapshots, kill the process any time",
     how_3_l4: "Full journal in runs/<id>/events.jsonl",
+    cmd_label: "Command Reference",
+    cmd_init: "Prepare a project: stack detection, git init, skeleton tasks.yaml, baseline checks",
+    cmd_wizard: "Draft tasks, acceptance, budgets and gates from plain words or a recipe; asks clarifying questions; prints a cost forecast",
+    cmd_import: "Draft a task queue from an existing specification via the planner",
+    cmd_lint: "Pre-flight validation: contract errors + frozen-acceptance advice",
+    cmd_run: "Run the queue; --dry-run prints a cost forecast and executes nothing",
+    cmd_resume: "Continue a stopped or paused run from on-disk history snapshots",
+    cmd_status: "Task table: state, tokens, cost, repairs, notes",
+    cmd_log: "Full event journal of one task",
+    cmd_report: "Cost/token summary; --plain — human-readable outcome and next steps",
+    cmd_accept: "Human gate #3: accept a done task (merge branch); manual override for blocked/failed",
+    cmd_ui: "Read-only web dashboard: kanban, log viewer, cost report, wizard-draft editor at /wizard?file=…",
     use_label: "Use Cases",
     uc_1_title: "Language Ports", uc_1_p: "Port a Python validator to TypeScript, a Bash script to Go, or a legacy module to a new framework — with acceptance tests ensuring parity.",
     uc_2_title: "Spec-Driven Modules", uc_2_p: "Turn a SPEC.md into a working feature: the planner drafts tasks, the coder implements, and tests prove correctness.",
@@ -699,44 +894,70 @@ const I18N = {
     why_label: "Why agent-forge?",
     why_1_title: "Budget Caps", why_1_p: "Per-task, per-run, and per-day USD limits. Exceed a cap and the task becomes blocked with a reason — no runaway bills.",
     why_2_title: "Scope Control", why_2_p: "File writes are locked to the paths you allow; canon/ writes and dependency installs are blocked in code. Command execution uses a tests/linters allowlist — a guardrail, not a sandbox (see SECURITY.md).",
-    why_3_title: "Second Model Review", why_3_p: "A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop.",
+    why_3_title: "Second Model Review", why_3_p: "A cheaper reviewer model checks every result against a checklist. Failures enter a bounded repair loop (≤3 iterations).",
     why_4_title: "Full Audit Trail", why_4_p: "Every token, every command, every cost is written to runs/<id>/events.jsonl.",
     why_5_title: "Mock Mode", why_5_p: "Test the entire pipeline without an API key. Perfect for CI and local development.",
     why_6_title: "Any Provider", why_6_p: "DeepSeek, OpenRouter free tiers, local Ollama, or your own endpoint. Presets are YAML — no code changes.",
+    why_7_title: "Honest Stops", why_7_p: "DISPUTE / STUCK / BLOCKED markers halt a task visibly when spec and reality disagree — a human resolves contradictions, never the model.",
+    why_8_title: "Resumable Runs", why_8_p: "Dialogue history is snapshotted after every agent step. Kill the process, reboot, come back tomorrow — forge resume picks up mid-task with context intact.",
+    why_9_title: "Plain-Language Reports", why_9_p: "forge report --plain answers three questions — what got done, what failed, what to do next — without reading a single YAML file.",
     footer_tag: "Controlled LLM code generation.", footer_docs: "Docs", footer_project: "Project", footer_meta: "Meta"
   },
   ru: {
-    nav_demo: "Демо", nav_how: "Как работает", nav_use: "Применение", nav_start: "Быстрый старт",
-    hero_lead: "Запускай десятки задач кодогенерации через LLM-агентов: реальные тестовые гейты, review второй моделью, жёсткие бюджетные капы и полный журнал на диске.",
-    btn_start: "Начать", btn_learn: "Как это работает",
-    p1_title: "Очередь задач", p1_desc: "DAG со scope и бюджетами",
-    p2_title: "Coder-агент", p2_desc: "Пишет код через инструменты",
-    p3_title: "Валидация", p3_desc: "Тесты и линтеры",
+    nav_demo: "Демо", nav_scen: "С чего начать", nav_how: "Как работает", nav_cmd: "Команды", nav_start: "Быстрый старт",
+    hero_lead: "Натрави на любой репозиторий, скажи своими словами, что нужно, и получи подтверждённую настройку — задачи, тесты, бюджеты, — которую LLM-агенты прогонят через реальные тестовые гейты, ревью второй моделью, жёсткие бюджетные капы и полный журнал на диске.",
+    btn_start: "Начать", btn_scen: "Выбрать сценарий",
+    p1_title: "Очередь задач", p1_desc: "Черновик wizard'а или ручной YAML",
+    p2_title: "Coder-агент", p2_desc: "Пишет код в рамках scope",
+    p3_title: "Валидация", p3_desc: "Настоящие тесты и линтеры",
     p4_title: "Ревью", p4_desc: "Вторая модель проверяет",
-    p5_title: "Починка", p5_desc: "Чинит или падает явно",
+    p5_title: "Починка", p5_desc: "Чинит, спорит или падает явно",
+    p6_title: "Гейт человека", p6_desc: "Ты принимаешь — прогон идёт дальше",
     demo_label: "Демо пайплайна · Симуляция", demo_subtitle: "Сценарная проходка без живых API-вызовов. Нажми <strong>Следующий шаг</strong>, чтобы пройти задачу через pipeline; реальные прогоны пишут те же события в <code>runs/&lt;id&gt;/events.jsonl</code>.",
-    tab_happy: "✅ Успешный путь", tab_repair: "🔧 Цикл починки",
+    tab_happy: "✅ Успешный путь", tab_repair: "🔧 Цикл починки", tab_dispute: "⚖️ Спор → гейт человека",
     btn_next: "▶ Следующий шаг", btn_auto: "⏵ Автовоспроизведение", btn_reset: "↺ Сброс",
     demo_info: "Нажми <strong>Следующий шаг</strong>, чтобы запустить pipeline.",
+    scen_label: "Старт с любым проектом",
+    scen_subtitle: "Четыре точки входа, один инструмент. Каждый путь заканчивается одинаково: подтверждённой очередью задач, прогнозом стоимости и агентами за тестовыми гейтами.",
+    wa_title: "Новый проект — пустая папка, ни кода, ни спецификаций",
+    wa_p: "forge init готовит каталог (определение стека, git, baseline-проверки). forge wizard сканирует его, задаёт пару уточняющих вопросов, если запрос неоднозначен, и чертит всю настройку с прогнозом стоимости. Черновик подтверждаешь ты — это гейт №1 — и запускаешь. С дефолтным профилем careful каждая задача ждёт твоего forge accept.",
+    wb_title: "Легаси-проект — много кода, ни спеки, ни AGENTS.md",
+    wb_p: "Wizard читает дерево, находит реальные команды тестов и прогоняет их как baseline до любого вызова модели — красный baseline это честный стоп, а не сюрприз посреди прогона. Рецепты (config/recipes/) собирают очередь детерминированно, с нулевой стоимостью LLM: test-coverage — самый безопасный первый шаг на легаси.",
+    wc_title: "Задокументированный проект — AGENTS.md, SPEC.md, canon/",
+    wc_p: "Всё уже написанное используется. AGENTS.md из корня проекта попадает прямо в контекст coder'а; forge import превращает существующий SPEC.md в черновик задач через planner; --spec прикладывает выдержку спеки к промпту каждой задачи, а canon_snapshot закрепляет канонический файл решений. Каталог canon/ для агентов всегда read-only.",
+    wd_title: "Ручной режим — свой tasks.yaml, полный контроль",
+    wd_p: "Пиши очередь сам: DAG-зависимости, gitignore-подобные scope, shell-команды acceptance, бюджеты на задачу, milestone-гейты. forge lint проверяет контракт до траты денег, --dry-run печатает прогноз стоимости, а UI только на чтение показывает канбан, пока прогон идёт.",
     how_label: "Как это работает",
-    how_1_title: "1. Определи задачи",
-    how_1_p: "Напиши очередь tasks.yaml: каждая задача имеет scope, acceptance-команды, бюджет и зависимости. Planner может сделать черновик из SPEC.md.",
-    how_1_l1: "Маски scope как gitignore",
-    how_1_l2: "Shell acceptance-команды",
-    how_1_l3: "Бюджет токенов и USD на задачу",
-    how_1_l4: "DAG-зависимости с topo-order",
+    how_1_title: "1. Очередь задач — черновик wizard'а или руками",
+    how_1_p: "Опиши работу своими словами, и wizard начертит tasks.yaml за тебя — или напиши сам, или импортируй из SPEC.md. В любом случае черновик перед запуском подтверждает человек.",
+    how_1_l1: "Wizard: скан репо + baseline + уточняющие вопросы + прогноз стоимости",
+    how_1_l2: "Рецепты рендерятся детерминированно — без вызова LLM, $0",
+    how_1_l3: "Lint ловит ошибки контракта и хрупкий acceptance до запуска",
+    how_1_l4: "Правь черновик карточками задач в браузерном UI",
     how_2_title: "2. Агентный цикл с ограничениями",
     how_2_p: "Coder-агент получает read_file, write_file, list_dir и run_command — ничего больше.",
     how_2_l1: "Запись только в scope задачи",
     how_2_l2: "canon/ всегда read-only",
     how_2_l3: "npm install заблокирован в коде",
     how_2_l4: "Нарушения логируются как события",
-    how_3_title: "3. Человеческий гейт перед merge",
-    how_3_p: "Ничего не мержится автоматически. Когда задача доходит до done, прогон останавливается до явного accept.",
-    how_3_l1: "forge accept <task-id> мержит ветку",
+    how_3_title: "3. Гейт человека перед merge",
+    how_3_p: "Ничего не мержится автоматически. Когда задача с гейтом доходит до done, прогон встаёт до явного accept. Задачу, застрявшую на капе бюджета или споре, владелец тоже может принять — явный override.",
+    how_3_l1: "forge accept <task-id> мержит ветку — или принимает blocked/failed",
     how_3_l2: "forge resume продолжает очередь",
-    how_3_l3: "Прогоны возобновляются со снапшотов",
+    how_3_l3: "Прогоны возобновляются со снапшотов — процесс можно убить в любой момент",
     how_3_l4: "Полный журнал в runs/<id>/events.jsonl",
+    cmd_label: "Справочник команд",
+    cmd_init: "Подготовить проект: определение стека, git init, skeleton tasks.yaml, baseline-проверки",
+    cmd_wizard: "Черновик задач, acceptance, бюджетов и гейтов из описания своими словами или рецепта; задаёт уточняющие вопросы; печатает прогноз стоимости",
+    cmd_import: "Черновик очереди задач из существующей спецификации через planner",
+    cmd_lint: "Предполётная проверка: ошибки контракта + советы по заморозке acceptance",
+    cmd_run: "Запуск очереди; --dry-run печатает прогноз стоимости и ничего не выполняет",
+    cmd_resume: "Продолжить остановленный прогон со снапшотов истории на диске",
+    cmd_status: "Таблица задач: состояние, токены, стоимость, починки, заметки",
+    cmd_log: "Полный журнал событий одной задачи",
+    cmd_report: "Сводка по стоимости/токенам; --plain — итог простым языком и следующие шаги",
+    cmd_accept: "Гейт человека №3: принять done-задачу (merge ветки); ручной override для blocked/failed",
+    cmd_ui: "Веб-дашборд только на чтение: канбан, просмотр логов, отчёт, редактор черновика на /wizard?file=…",
     use_label: "Применение",
     uc_1_title: "Порты языков", uc_1_p: "Портируй Python-валидатор на TypeScript, Bash-скрипт на Go или легаси-модуль на новый фреймворк — с acceptance-тестами на паритет.",
     uc_2_title: "Модули по спеке", uc_2_p: "Преврати SPEC.md в рабочую фичу: planner чертит задачи, coder реализует, тесты доказывают корректность.",
@@ -748,14 +969,18 @@ const I18N = {
     why_label: "Почему agent-forge?",
     why_1_title: "Бюджетные капы", why_1_p: "Лимиты per-task, per-run и per-day в USD. Превышение → задача blocked с причиной — нет runaway-списаний.",
     why_2_title: "Контроль scope", why_2_p: "Запись файлов ограничена разрешёнными путями; запись в canon/ и установка зависимостей блокируются в коде. Запуск команд — через allowlist тестов/линтеров: это ограничение, а не песочница (см. SECURITY.md).",
-    why_3_title: "Второе мнение", why_3_p: "Дешевая reviewer-модель проверяет каждый результат по чек-листу. Провалы уходят в bounded repair-цикл.",
+    why_3_title: "Второе мнение", why_3_p: "Дешевая reviewer-модель проверяет каждый результат по чек-листу. Провалы уходят в ограниченный repair-цикл (≤3 итерации).",
     why_4_title: "Полный аудит", why_4_p: "Каждый токен, каждая команда, каждый доллар — в runs/<id>/events.jsonl.",
     why_5_title: "Mock-режим", why_5_p: "Тестируй весь pipeline без API-ключа. Идеально для CI и разработки самого agent-forge.",
     why_6_title: "Любой провайдер", why_6_p: "DeepSeek, бесплатные модели OpenRouter, локальный Ollama или свой endpoint. Пресеты — YAML, без правки кода.",
+    why_7_title: "Честные остановки", why_7_p: "Маркеры DISPUTE / STUCK / BLOCKED явно останавливают задачу, когда спека расходится с реальностью, — противоречия разрешает человек, а не модель.",
+    why_8_title: "Возобновляемые прогоны", why_8_p: "История диалога снапшотится после каждого шага агента. Убей процесс, перезагрузись, вернись завтра — forge resume подхватит задачу посреди фазы с полным контекстом.",
+    why_9_title: "Отчёты простым языком", why_9_p: "forge report --plain отвечает на три вопроса — что сделано, что не получилось, что делать дальше, — без чтения единого YAML-файла.",
     footer_tag: "Управляемая агентная кодогенерация.", footer_docs: "Доки", footer_project: "Проект", footer_meta: "Мета"
   }
 };
 
+const DOCS_BASE = "https://github.com/Xarawg/agent-forge/blob/master/";
 let currentLang = 'en';
 function setLang(lang) {
   currentLang = lang;
@@ -764,6 +989,11 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
     if (I18N[lang][key]) el.innerHTML = I18N[lang][key];
+  });
+  // Documentation links follow the selected language (ru → *.ru.md where it exists)
+  document.querySelectorAll('[data-doc]').forEach(el => {
+    const path = (lang === 'ru' && el.dataset.ru) ? el.dataset.ru : el.dataset.en;
+    el.href = DOCS_BASE + path;
   });
   // Re-render demo if active
   if (demoStep >= 0) renderDemo();
@@ -798,7 +1028,7 @@ const SCENARIOS = {
     { state: 'running', info: 'The <strong>coder</strong> agent writes code inside the allowed scope.', log: ['[coder] read_file: tools/validate.py','[coder] write_file: tools-ts/validate.ts (1.2K)','[coder] run_command: cd tools-ts && npm test','[coder] DONE — 12 steps'], cardCls: '' },
     { state: 'validating', info: 'Runner executes <strong>acceptance</strong> commands.', log: ['[validate] npm test → exit=0','[validate] 47/47 passed'], cardCls: '' },
     { state: 'review', info: 'Second model <strong>reviews</strong> the result.', log: ['[reviewer] Checking scope, tests, deps','[reviewer] Verdict: APPROVE ✅'], cardCls: '' },
-    { state: 'done', info: 'Task <strong>done</strong>. Commit on branch <code>forge/port-validator</code>.', log: ['[git] committed 2 files','[done] port-validator — $0.17'], cardCls: 'done' }
+    { state: 'done', info: 'Task <strong>done</strong>. Commit on branch <code>forge/port-validator</code>. Run pauses for <code>forge accept</code>.', log: ['[git] committed 2 files','[gate] waiting for forge accept port-validator'], cardCls: 'done' }
   ],
   repair: [
     { state: 'queued', info: 'Task <strong>api-refactor</strong> queued. Budget: $0.80.', log: ['[runner] Task api-refactor queued'], cardCls: '' },
@@ -809,6 +1039,14 @@ const SCENARIOS = {
     { state: 'validating', info: 'All tests <strong>green</strong>.', log: ['[validate] pytest → exit=0','[validate] 12/12 passed'], cardCls: '' },
     { state: 'review', info: 'Reviewer: <strong>APPROVE</strong>.', log: ['[reviewer] compat shim OK','[reviewer] Verdict: APPROVE ✅'], cardCls: '' },
     { state: 'done', info: 'Done after <strong>1 repair</strong>. Total: $0.42.', log: ['[git] committed 4 files','[done] api-refactor — $0.42 · 1 repair'], cardCls: 'done' }
+  ],
+  dispute: [
+    { state: 'queued', info: 'Task <strong>init-package</strong> queued (drafted by wizard). Budget: $0.30.', log: ['[runner] Task init-package queued'], cardCls: '' },
+    { state: 'running', info: 'Coder creates the package inside its scope.', log: ['[coder] write_file: calc/__init__.py','[coder] write_file: calc/calc.py (0.4K)','[coder] DONE — 9 steps'], cardCls: '' },
+    { state: 'validating', info: '❌ Acceptance <code>pytest -q</code> exits 5 — the tests live in a later task\'s scope and don\'t exist yet.', log: ['[validate] python -m pytest -q → exit=5','[validate] no tests collected'], cardCls: 'failed' },
+    { state: 'review', info: 'Repair agent raises <strong>DISPUTE</strong>: the acceptance command cannot pass at this point in the DAG.', log: ['[repair] spec contradicts reality','[repair] Marker: DISPUTE ⚖️'], cardCls: 'repair' },
+    { state: 'blocked', info: 'Task <strong>blocked</strong> — the contradiction goes to a human, not back to the model.', log: ['[state] init-package → blocked','[journal] DISPUTE: acceptance pytest -q cannot pass before add-tests'], cardCls: 'blocked' },
+    { state: 'done', info: 'Owner reviews the diff and runs <code>forge accept init-package</code> — an explicit override. <code>forge resume</code> continues the queue.', log: ['[gate] accepted by owner (override)','[resume] continuing 3 remaining tasks'], cardCls: 'done' }
   ]
 };
 
@@ -817,12 +1055,15 @@ let demoStep = -1;
 let autoTimer = null;
 
 function getSteps() { return SCENARIOS[currentScenario]; }
-function getTaskName() { return currentScenario === 'happy' ? 'port-validator' : 'api-refactor'; }
+function getTaskName() {
+  return currentScenario === 'happy' ? 'port-validator'
+    : currentScenario === 'repair' ? 'api-refactor' : 'init-package';
+}
 
 const cardHTML = (name) => `
   <div class="demo-card" id="demoCard">
     <div class="title">${name}</div>
-    <div class="meta">${currentScenario === 'happy' ? 'scope: tools-ts/** · budget: $0.50' : 'scope: src/api/** · budget: $0.80 · max repairs: 3'}</div>
+    <div class="meta">${currentScenario === 'happy' ? 'scope: tools-ts/** · budget: $0.50' : currentScenario === 'repair' ? 'scope: src/api/** · budget: $0.80 · max repairs: 3' : 'scope: calc/*.py · budget: $0.30 · gate: review'}</div>
   </div>
 `;
 
@@ -846,6 +1087,8 @@ function renderDemo() {
   } else if (demoStep >= STEPS.length) {
     info.innerHTML = currentScenario === 'repair'
       ? '🔧 Task done after <strong>repair loop</strong>.'
+      : currentScenario === 'dispute'
+      ? '⚖️ Dispute resolved by a <strong>human decision</strong> — not by a smarter prompt.'
       : '🎉 Pipeline complete.';
   } else {
     info.innerHTML = currentLang === 'ru'

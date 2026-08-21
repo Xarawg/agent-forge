@@ -129,20 +129,36 @@ tasks:
   на паузу до явного `forge accept <id>` (человеческий гейт №3: accept фиксирует
   приёмку и мержит ветку `forge/<id>` локально). Продолжение — `forge resume <run_id>`.
   Гейт сдерживает только `done`-задачи: `failed` волну не блокирует (by design).
+  **Override владельца**: `forge accept` на задаче в `blocked`/`failed` переводит её
+  в `done` с пометкой `override` в журнале — иначе задача, упершаяся в кумулятивный
+  per-task кап токенов, не могла бы восстановиться никогда (токены копятся между resume).
 - **resume**: `forge run`/`resume` пропускает задачи в `done`; снапшоты диалога
   `tasks/<id>.<phase>.history.json` позволяют продолжить убитую посреди фазы задачу
-  с контекстом и сохранённым счётчиком шагов.
+  с контекстом и сохранённым счётчиком шагов. Снапшоты истории — не состояния задач:
+  `status`/UI/отчёт их игнорируют.
 - **acceptance** исполняется runner'ом как есть (shell, cwd = корень target-репо,
   таймаут 300 с на команду) — whitelist инструментов на них НЕ действует.
 
-## 5. prompts/ — библиотека промптов
+## 5. Команды онбординга (init / wizard / lint / dry-run / рецепты)
+
+Всё здесь готовит или проверяет прогон **до** траты денег; черновик всегда подтверждает человек (гейт №1).
+
+- **`forge init [--target DIR] [--profile careful|normal|fast] [--force] [--no-check]`** — подготовка проекта одной командой (`forge/init.py` + `forge/detect.py`): определение стека (Python/Node/.NET — команды тестов, файлы пакетов), git init при отсутствии, skeleton `tasks.yaml` только с реально найденными проверками и **baseline** (найденные проверки на нетронутом репо). Красный baseline — честный стоп-сигнал: сначала чините проект, потом агенты.
+- **`forge wizard [--prompt "..." | --prompt-file F | --recipe NAME] [--profile ...] [--yes] [--out FILE] [--no-check] [--provider P]`** (`forge/wizard.py`) — черновик полной настройки из промпта своими словами: скан репо → baseline → planner чертит задачи со scope, acceptance (из найденных проверок), бюджетами профиля и гейтами → прогноз стоимости → `tasks.wizard.yaml`. При неоднозначном запросе planner возвращает блок `QUESTIONS:`, и wizard спрашивает интерактивно (`--yes` — дефолты, неинтерактивно). Scope вида `dir/` нормализуется в `dir/**`.
+- **`forge wizard --recipe NAME`** — детерминированный рендер рецепта из `config/recipes/` (`feature`, `test-coverage`, `docs-sync`): задаёт `questions` рецепта, подставляет ответы в `{плейсхолдеры}`, **без вызова LLM ($0)**.
+- **`forge lint <tasks.yaml>`** (`forge/lint.py`) — предполётная проверка без запуска: ошибки контракта (схема, циклы DAG, висячие зависимости) + советы по заморозке acceptance (например, тестовые команды, которые не могут пройти на позиции задачи в DAG).
+- **`forge run --dry-run`** (`forge/dryrun.py`) — прогноз стоимости очереди из цен `models.yaml` и бюджетов задач; ничего не выполняется, журнал не пишется.
+- **Профили капов** (`forge/profiles.py`): `careful` — задача ≤ $0.30, гейт после каждой задачи (первые прогоны, free-модели); `normal` — дефолты `models.yaml`; `fast` — крупные бюджеты, гейты только в конце.
+- **Редактор черновика в UI**: `forge ui`, затем `/wizard?file=<путь-к-черновику>` — рендерит черновик как редактируемые карточки задач; подтверждение записывает YAML обратно в тот же файл. В остальном UI только читает.
+
+## 6. prompts/ — библиотека промптов
 
 Вся текстовка промптов — файлы в `prompts/`, не в коде (SPEC §7):
 
 | Файл | Назначение |
 |---|---|
 | `00_system.md` | системный промпт, общий для всех ролей |
-| `10_planner.md` | planner: SPEC → черновик tasks.yaml (`forge import`) |
+| `10_planner.md` | planner: SPEC/промпт → черновик tasks.yaml (`forge import`, `forge wizard`); при неоднозначности запроса может ответить блоком `QUESTIONS:` |
 | `20_codegen.md` | coder: правила цикла, маркеры DONE/BLOCKED/GAP, запрет коммита |
 | `30_reviewer.md` | reviewer: чек-лист ревью, вердикты APPROVE/REWORK/REJECT |
 | `40_repair.md` | repair: починка по вердикту, маркеры STUCK/DISPUTE |
@@ -153,12 +169,14 @@ tasks:
 (`prompts_version`) как git-хеш последнего коммита, трогавшего `prompts/`
 (вне git — sha256 содержимого; `forge/prompts.py:prompts_version`).
 
-## 6. Как натравить forge на другой проект
+## 7. Как натравить forge на другой проект
 
 ```bash
 pip install -e .            # в репозитории agent-forge
 forge run --tasks path/to/tasks.yaml --target /path/to/target-repo --spec path/to/SPEC.md
 ```
+
+Варианты без ручного YAML (см. §5): `forge wizard --target /path/to/target-repo --prompt "..."` чертит очередь из описания своими словами; `forge init --target ...` готовит новый/легаси-проект (определение стека, git, skeleton, baseline).
 
 - `--tasks` — очередь задач (см. §4). Черновик из спеки: `forge import --spec SPEC.md --out tasks.draft.yaml`, затем вычитать и поправить руками (гейт №1).
 - `--target` — корень целевого репозитория (дефолт — текущий каталог). Все пути
@@ -174,7 +192,7 @@ forge run --tasks path/to/tasks.yaml --target /path/to/target-repo --spec path/t
     заблокированы на уровне инструмента (AF-10).
 - Прогон и UI независимы: `forge ui` читает `runs/` и работает параллельно.
 
-## 7. Замечания по платформам
+## 8. Замечания по платформам
 
 - **Windows (референс, NFR-1)**: Git Bash; пути с пробелами допустимы. Дочерним
   процессам прокидываются дефолты `ProgramFiles` / `ProgramFiles(x86)` /

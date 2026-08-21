@@ -1,6 +1,6 @@
 # ARCHITECTURE — agent-forge
 
-Version 0.1 · 19.08.2026 · Per specification `docs/design/specs/agent-forge/SPEC.md` v1.0.
+Version 0.2 · 21.08.2026 · Per specification `docs/SPEC.md` v1.3.
 
 ## Overview
 
@@ -30,7 +30,7 @@ tasks.yaml ──load_tasks──► DAG (topo_order)
 
 | Module | Responsibility |
 |---|---|
-| `cli.py` | argparse: run / resume / status / log / report / accept / import |
+| `cli.py` | argparse: run / resume / status / log / report / init / wizard / lint / accept / ui / import |
 | `config.py` | models.yaml + provider preset + .env; builds RoleConfig per role |
 | `models.py` | tasks.yaml: parsing, validation, DAG, task states |
 | `llm.py` | `LLMClient` protocol; `OpenAIClient` (retry/backoff, fallback models); `MockClient` |
@@ -38,8 +38,15 @@ tasks.yaml ──load_tasks──► DAG (topo_order)
 | `agents.py` | "model ↔ tools" loop; single-step reviewer; markers |
 | `runner.py` | Phase orchestration, budgets, gates, git |
 | `journal.py` | run.json, events.jsonl, tasks/<id>.json |
-| `report.py` | status/report summaries from journal |
+| `report.py` | status/report summaries from journal (incl. `--plain`); ignores `*.history.json` snapshots |
 | `prompts.py` | Prompt loading/rendering; library version (git hash / sha256) |
+| `detect.py` | Target-project stack detection: test commands, package files (Python/Node/.NET) |
+| `init.py` | `forge init`: git init, skeleton tasks.yaml from detected checks, baseline run |
+| `wizard.py` | `forge wizard`: repo scan + baseline + planner draft / recipe render; QUESTIONS interview; scope normalization (`dir/` → `dir/**`) |
+| `profiles.py` | Cap profiles `careful` / `normal` / `fast` (budgets + gate density) |
+| `lint.py` | `forge lint`: tasks.yaml contract validation + frozen-acceptance advisor |
+| `dryrun.py` | `forge run --dry-run`: queue cost forecast without execution |
+| `ui.py` + `ui_static/` | Read-only web UI (stdlib http.server, zero-CDN): kanban, log viewer, report, wizard-draft editor |
 
 ## Key Mechanisms
 
@@ -57,6 +64,12 @@ Checked before task start and before each repair iteration. per-day cap is sum o
 
 ### Git (§1.4, NFR-5)
 If target is a git repository: branch `forge/<task-id>` per task, local commit of written files after APPROVE. `forge accept` merges branch locally (`--no-ff`). Push is absent as a class. If target is not a git repository — phase is skipped with journal entry.
+
+### Accept Override (§FR-4)
+`forge accept` on a `blocked`/`failed` task flips it to `done` with an `override` note. Without it a task that hit the cumulative per-task token cap was a permanent dead-end: tokens accumulate across resumes, so the pre-flight budget check would re-block every retry before any model call.
+
+### History Snapshots (NFR-2)
+After every agent step the dialogue is snapshotted to `tasks/<id>.<phase>.history.json`; resume continues a killed task mid-phase with context and step counter intact. These files are not task states — report/UI/status skip them by name.
 
 ## Journal (§5)
 
