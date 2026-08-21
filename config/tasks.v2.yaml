@@ -28,6 +28,9 @@ tasks:
     # Три потока: 1) подготовка проекта (init, .env, git), 2) черновик плана
     # (forge import + ручная правка tasks.yaml), 3) запуск (run/status/ui/accept/resume).
     # Ссылки на WORKFLOWS из README.md и README.ru.md.
+    # E2 (ARCH_V3_WALKTHROUGH): forge init реализуется только в t3 — документ
+    # описывает ЦЕЛЕВОЙ UX потоков; если t3 зависнет в failed, снять пометки
+    # про init из WORKFLOWS перед гейтом wave-1.
 
   - id: t2-site-ru-links
     title: "Сайт: RU-переключатель ведёт на русские версии доков"

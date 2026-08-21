@@ -1,6 +1,6 @@
 # SPEC — agent-forge: Agentic Code-Generation Infrastructure
 
-Version 1.1 · Self-specification of the tool (adapted from the original specification package; product/monorepo coupling removed).
+Version 1.2 · Self-specification of the tool (adapted from the original specification package; product/monorepo coupling removed). v1.2: NFR-2 amended (AF-14 server mode), v2/v3 roadmap references (§7).
 
 ## 1. Goal
 
@@ -54,7 +54,7 @@ Each run records in `run.json`: role models, prompts version (git hash of `promp
 ## 4. Non-Functional Requirements
 
 - NFR-1: Windows 10/11 + Git Bash; no admin rights; Python 3.12+.
-- NFR-2: No background daemons — one command = one run; state on disk (process can be killed and `forge resume`; dialogue history snapshots in `tasks/<id>.<phase>.history.json`). Web UI — separate read-only process.
+- NFR-2: No background daemons — one command = one run; state on disk (process can be killed and `forge resume`; dialogue history snapshots in `tasks/<id>.<phase>.history.json`). Web UI — separate read-only process. **Amended by AF-14 (2026-08-21):** optional `forge serve` daemon mode is allowed (FastAPI `[server]` extra); on-disk journals remain the single source of truth in both modes. See docs/ARCH_TARGET.ru.md §3.1.
 - NFR-3: Secrets only in `.env` (in .gitignore); logs do not contain keys.
 - NFR-4: Pilot task cost on paid model ≤ $0.50; on free models — $0 (RPM limits handled by backoff).
 - NFR-5: agent-forge never pushes to remote git; branch + local commit — yes, push — no.
@@ -84,3 +84,4 @@ Journal event: `{ts, run_id, task_id, phase, role, model, tokens_in, tokens_out,
 - Do not invent prompts in code — all prompt text lives in `prompts/` (versioned, reviewed).
 - Do not hide raw model responses — events.jsonl is complete (except secrets).
 - Do not add parallelism in v1: tasks run sequentially (free limits); parallelism — NFR for v2.
+  **Roadmap (2026-08-21):** v2 queue — `config/tasks.v2.yaml` (gap-fix wave per docs/GAP_ANALYSIS.ru.md); v3 queue — `config/tasks.v3.yaml` (target architecture per docs/ARCH_TARGET.ru.md: server mode, executor plane incl. remote docker, context/evals/observability). DAG parallelism inside a run is scheduled for v3 wave D (multi-run first); human gates between waves remain mandatory.

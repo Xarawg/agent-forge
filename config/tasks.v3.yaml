@@ -96,6 +96,9 @@ tasks:
     # Статика без build-шага (принцип). Форма запуска прогона (tasks.yaml из репо
     # server'а), кнопки Stop/Resume/Accept на гейтах, стадии задачи обновляются
     # по SSE без meta-refresh. Токен — из prompt() при первом 401.
+    # E5 (ARCH_V3_WALKTHROUGH): эта задача ЗАМЕНЯЕТ pipeline-view из v2 t5
+    # (поллинг → SSE); если v2 t5 уже сделан — мигрировать его рендер стадий
+    # на SSE-стрим, не строить второй параллельный вид.
 
   # ---------- Wave C: execution plane ----------
 
@@ -270,6 +273,9 @@ tasks:
     # release.yml (по тегу v*): build+push образа в ghcr.io, publish в PyPI
     # (trusted publishing). docker-compose.server.yml: server + тома runs/config/.env
     # + порт. README: секция «Server mode from Docker».
+    # E7 (ARCH_V3_WALKTHROUGH): acceptance не проверяет реальную публикацию —
+    # на гейте wave-e владелец вручную прогоняет workflow_dispatch и верифицирует
+    # публикацию, прежде чем forge accept.
 
   # ---------- Wave F: context & retrieval ----------
 
