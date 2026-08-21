@@ -51,6 +51,8 @@ tasks:
     # с polling-интервалом ~0.5s, закрытие при событии 'run finished'.
     # Параллельные прогоны одного target запрещены (409). Тесты — с TestClient
     # fastapi (mock-режим LLM).
+    # E4 (ARCH_V3_WALKTHROUGH): startup-обход — прогоны в нефинальных состояниях
+    # при старте сервера помечаются событием 'run interrupted' (добивка через resume).
 
   # ---------- Wave B: control API + UI ----------
 
@@ -173,6 +175,29 @@ tasks:
     # Тесты — фейковый ssh/docker CLI. SECURITY.md: граница «ключи не покидают
     # control plane».
 
+  - id: v3-c4-remote-bootstrap
+    title: "forge remote bootstrap: доставка target-репо на удалённый хост"
+    spec_ref: "docs/ARCH_V3_WALKTHROUGH.ru.md E3 (пробел AF-16)"
+    scope_paths:
+      - "forge/remote.py"
+      - "forge/cli.py"
+      - "tests/test_remote_bootstrap.py"
+      - "docs/CONFIGURATION.md"
+      - "docs/CONFIGURATION.ru.md"
+    depends_on:
+      - v3-c3-remote-docker
+    acceptance:
+      - "python -m pytest tests/test_remote_bootstrap.py -q"
+      - "python -m pytest -q"
+    budget:
+      max_tokens: 220000
+      max_cost_usd: 0.75
+    # AF-16 не покрывал первичную доставку репо (push запрещён). Решение:
+    # forge remote bootstrap --host ssh://user@host — git archive по SSH (tar в
+    # каталог клона на хосте), проверка связности dockerd (docker version через
+    # DOCKER_HOST), первичный pull/build executor-образа на удалённом демоне.
+    # Идемпотентно. Тесты — фейковый ssh/docker CLI.
+
   # ---------- Wave D: state & scale ----------
 
   - id: v3-d1-sqlite-index
@@ -185,6 +210,7 @@ tasks:
       - "tests/test_indexdb.py"
     depends_on:
       - v3-c3-remote-docker
+      - v3-c4-remote-bootstrap
     acceptance:
       - "python -m pytest tests/test_indexdb.py -q"
       - "python -m pytest -q"
@@ -195,6 +221,9 @@ tasks:
     # обновление из events.jsonl; forge reindex — полная пересборка (индекс
     # пересобираем, журналы — истина). report/status читают индекс, если он свежий
     # (mtime новее журналов), иначе — как сейчас.
+    # E6-инвариант (ARCH_V3_WALKTHROUGH): бюджетные проверки runner'а ВСЕГДА
+    # читают журналы напрямую, никогда индекс. Добавить тест
+    # test_index_never_source_of_budget_truth.
 
   - id: v3-d2-multi-run-dashboard
     title: "UI: multi-run dashboard, параллельные прогоны разных target"
@@ -358,7 +387,7 @@ tasks:
       max_cost_usd: 0.75
     # Prometheus text format; агрегация из indexdb + живые счётчики активных
     # прогонов: tokens/cost по ролям и моделям, длительность фаз (histogram),
-    # repair rate, blocked/failed rate, utilization капов. Стdlib-рендер текста,
+    # repair rate, blocked/failed rate, utilization капов. Stdlib-рендер текста,
     # без prometheus-client в ядре.
 
   - id: v3-h2-otel-and-alerts
