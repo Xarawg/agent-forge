@@ -111,3 +111,71 @@ def test_wizard_interview_noninteractive_warns(cfg, target: Path, monkeypatch) -
                      check=False, ask=None)
     assert "неинтерактивный режим" in out
     assert (target / OUT_NAME).exists()
+
+
+# --- устойчивость к реальному выводу модели (найдено живым прогоном DeepSeek) ---
+
+
+def test_strip_fences() -> None:
+    from forge.wizard import _strip_fences
+
+    assert _strip_fences("```yaml\npackage: x\n```") == "package: x"
+    assert _strip_fences("package: x") == "package: x"
+    assert _strip_fences("```\npackage: x\n```\n") == "package: x"
+
+
+def test_wizard_repairs_fenced_yaml(cfg, target: Path) -> None:
+    """Модель вернула YAML в markdown-ограждении — wizard должен справиться сам."""
+    client = MockClient(cfg)
+    original = client.chat
+
+    def fenced_chat(role, messages, tools=None):  # noqa: ANN001
+        result = original(role, messages, tools)
+        if role == "planner":
+            result.content = "```yaml\n" + result.content + "\n```"
+        return result
+
+    client.chat = fenced_chat  # type: ignore[method-assign]
+    out = run_wizard(cfg, client, target, "задача", check=False)
+    assert "валиден" in out
+    assert load_tasks(target / OUT_NAME).tasks
+
+
+def test_wizard_repairs_broken_yaml_via_retry(cfg, target: Path) -> None:
+    """Первый ответ — битый YAML, второй (после repair-просьбы) — валидный."""
+    client = MockClient(cfg)
+    original = client.chat
+    calls = {"n": 0}
+
+    def broken_then_ok(role, messages, tools=None):  # noqa: ANN001
+        result = original(role, messages, tools)
+        if role == "planner":
+            calls["n"] += 1
+            if calls["n"] == 1:
+                result.content = "tasks:\n  - id: x\n    title: двоеточие: без кавычек"
+        return result
+
+    client.chat = broken_then_ok  # type: ignore[method-assign]
+    out = run_wizard(cfg, client, target, "задача", check=False)
+    assert calls["n"] == 2, "wizard обязан попросить planner починить YAML"
+    assert "валиден" in out
+
+
+def test_wizard_accepts_bare_task_list(cfg, target: Path) -> None:
+    """Модель вернула голый список задач без обёртки tasks: — wizard дополнит."""
+    from forge.llm import MOCK_TASKS_DRAFT
+
+    bare_list = yaml.safe_load(MOCK_TASKS_DRAFT)["tasks"]
+    client = MockClient(cfg)
+    original = client.chat
+
+    def list_chat(role, messages, tools=None):  # noqa: ANN001
+        result = original(role, messages, tools)
+        if role == "planner":
+            result.content = yaml.safe_dump(bare_list, allow_unicode=True)
+        return result
+
+    client.chat = list_chat  # type: ignore[method-assign]
+    out = run_wizard(cfg, client, target, "задача", check=False)
+    assert "валиден" in out
+    assert load_tasks(target / OUT_NAME).tasks

@@ -98,6 +98,7 @@ def _forecast(tasks: list[dict[str, Any]]) -> float:
 
 
 MAX_INTERVIEW_ROUNDS = 2  # защита от бесконечных уточнений: дальше — черновик как есть
+MAX_YAML_REPAIRS = 2      # столько же попыток починить невалидный YAML ответа
 
 
 def _parse_questions(content: str) -> list[str]:
@@ -112,13 +113,46 @@ def _parse_questions(content: str) -> list[str]:
     return questions
 
 
+def _strip_fences(text: str) -> str:
+    """Снять markdown-ограждение ```yaml ... ``` — модели добавляют его вопреки промпту."""
+    stripped = text.strip().splitlines()
+    if stripped and stripped[0].startswith("```"):
+        stripped = stripped[1:]
+    if stripped and stripped[-1].strip().startswith("```"):
+        stripped = stripped[:-1]
+    return "\n".join(stripped).strip()
+
+
+def _coerce_tasks_doc(parsed: Any) -> Any:
+    """Нормализация структуры: голый список задач → {tasks: [...]};
+    mapping без tasks — структурная ошибка (чинится repair-раундом)."""
+    if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+        return {"tasks": parsed}
+    if isinstance(parsed, dict) and isinstance(parsed.get("tasks"), list):
+        return parsed
+    return None
+
+
+def _try_parse_yaml(text: str) -> tuple[Any, str | None]:
+    """yaml.safe_load со снятием ограждений + коэрция структуры; (None, ошибка)."""
+    candidate = _strip_fences(text)
+    try:
+        parsed = yaml.safe_load(candidate)
+    except yaml.YAMLError as exc:
+        return None, str(exc).split("\n")[0][:300]
+    doc = _coerce_tasks_doc(parsed)
+    if doc is None:
+        return None, "YAML валиден, но нужен mapping с ключом tasks: [...] (или список задач)"
+    return doc, None
+
+
 def _interview(
     cfg: ForgeConfig, client: LLMClient, journal: Journal, system: str,
     intent: str, scan_summary: str,
     ask: Callable[[str], str] | None,
     lines: list[str],
 ) -> str:
-    """Цикл «planner ↔ вопросы пользователю» до YAML-черновика.
+    """Цикл «planner ↔ вопросы/починка YAML» до валидного черновика.
 
     ask=None (неинтерактивный режим): вопросы выводятся в отчёт, черновик
     запрашивается без ответов — с явным предупреждением.
@@ -127,12 +161,28 @@ def _interview(
         {"role": "system", "content": system},
         *_planner_prompt(intent, scan_summary),
     ]
-    for round_no in range(MAX_INTERVIEW_ROUNDS + 1):
+    repairs = 0
+    for round_no in range(MAX_INTERVIEW_ROUNDS + MAX_YAML_REPAIRS + 1):
         result = client.chat("planner", messages)
         log_model_call(journal, cfg, None, "plan", "planner", result)
         questions = _parse_questions(result.content)
         if not questions:
-            return result.content
+            # YAML-черновик: валиден — возвращаем; нет — просим починить (≤2 раз).
+            _parsed, error = _try_parse_yaml(result.content)
+            if error is None or repairs >= MAX_YAML_REPAIRS:
+                if error is not None:
+                    lines.append("")
+                    lines.append(f"⚠ YAML черновика не чинится за {MAX_YAML_REPAIRS} попытки: {error}")
+                return result.content
+            repairs += 1
+            messages.append({"role": "assistant", "content": result.content})
+            messages.append({"role": "user", "content": (
+                f"Ответ не подходит: {error}\n"
+                "Верни СТРОГО валидный YAML: один документ с ключом tasks: [...], "
+                "без markdown-ограждений ``` и прозы; все строки с двоеточиями и "
+                "спецсимволами — в двойных кавычках."
+            )})
+            continue
         if round_no >= MAX_INTERVIEW_ROUNDS or ask is None:
             lines.append("")
             lines.append("Planner запросил уточнения" +
@@ -192,9 +242,8 @@ def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str,
               + "\n\n" + load_prompt(cfg.prompts_dir, "planner"))
     draft = _interview(cfg, client, journal, system, intent, scan_summary, ask, lines)
 
-    try:
-        raw: Any = yaml.safe_load(draft)
-    except yaml.YAMLError:
+    raw, parse_error = _try_parse_yaml(draft)
+    if parse_error is not None:
         raw = None  # ответ planner'а — не YAML; сохраним как есть, пользователь поправит
     tasks, warnings = _normalize(raw, profile, scan_repo(root).test_commands)
 
