@@ -1,0 +1,317 @@
+<!-- GENERATED from site/index.html by site/build_pages.py — do not edit -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-forge — Field Guides</title>
+<meta name="description" content="Ten field scenarios of agent-forge in real work: greenfield from spec, legacy adoption, AI-generated code rescue.">
+<style>
+:root{--bg:#0a0a0a;--bg-raised:#111;--surface:#1a1a1a;--border:#2a2a2a;--text:#f0f0f0;--text-dim:#888;--accent:#d40027;--success:#2ea043;--font-body:"Inter",-apple-system,"Segoe UI",Roboto,sans-serif;--font-mono:Consolas,Menlo,monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);margin:0}
+nav.pill{position:fixed;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;background:var(--bg-raised);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:999px;padding:6px}
+nav a.back,nav button.lang{color:var(--text-dim);background:none;border:none;cursor:pointer;font:inherit;text-decoration:none;padding:8px 16px;border-radius:999px;transition:color .2s}
+nav a.back:hover,nav button.lang:hover{color:var(--accent)}
+.container{max-width:1000px;margin:auto;padding:0 32px}
+header.hero{padding:140px 0 60px}
+header.hero h1{font-size:48px;font-weight:800;margin:0 0 16px}
+header.hero p.lead{color:var(--text-dim);max-width:640px;margin:0}
+section.case{border:1px solid var(--border);background:var(--bg-raised);padding:28px;margin-bottom:20px}
+section.case .n{color:var(--accent);font-family:var(--font-mono)}
+section.case h2{color:var(--text);margin:0 0 8px}
+p.ctx{color:var(--text-dim);font-size:0.95rem;line-height:1.5;margin:0 0 12px;padding-left:12px;border-left:2px solid var(--border)}
+pre.term{background:#050505;border:1px solid var(--border);border-radius:4px;padding:16px;overflow-x:auto;font-family:var(--font-mono);font-size:0.9rem;line-height:1.5;color:var(--text);margin:0 0 20px}
+pre.term .p{color:var(--accent);font-weight:600}
+p.essence{font-size:1.1rem;line-height:1.6;color:var(--text);font-weight:500;margin:0 0 20px}
+section.skel ol li{margin-bottom:8px;padding-left:8px;color:var(--text);font-size:0.95rem;line-height:1.6}
+footer{border-top:1px solid var(--border);margin-top:40px;padding:20px 0;text-align:center;color:var(--text-dim);font-size:0.85rem}
+footer a{color:var(--accent);text-decoration:none}
+footer a:hover{text-decoration:underline}
+@media (max-width:768px){
+  section.case{padding:20px;margin-bottom:16px}
+  p.ctx{padding-left:8px;font-size:0.9rem}
+  pre.term{padding:12px;font-size:0.85rem}
+  p.essence{font-size:1rem}
+  footer{padding:16px 0}
+}
+</style>
+</head>
+<body>
+<nav class="pill"><a class="back" href="index.html">← agent-forge</a>
+<button class="lang" id="langBtn">RU</button></nav>
+<header class="hero"><div class="container"><h1 id="tTitle"></h1><p class="lead" id="tLead"></p></div></header>
+<main class="container" id="cases"></main>
+<section class="skel"><div class="container"><h2 id="tSkel"></h2><ol id="skelList"></ol></div></section>
+<footer><div class="container"><div id="footLinks"></div>
+<p>MIT © 2026 agent-forge</p></div></footer>
+<script>
+const SCENARIOS = [
+  {
+    "n": 1,
+    "title": {
+      "en": "Greenfield: new service from specification to code",
+      "ru": "Greenfield: новый сервис от спецификации к коду"
+    },
+    "context": {
+      "en": "A startup writes a URL-shortener from scratch. First a person writes SPEC.md (API, storage, acceptance criteria), then the package goes to agents.",
+      "ru": "Стартап пишет URL-shortener с нуля. Сначала человек пишет SPEC.md (API, хранение, критерии приёмки), затем пакет идёт в агентов."
+    },
+    "code": "forge init --target ./shortener                       # git, skeleton, baseline\nforge import --spec ./shortener/SPEC.md --out tasks.draft.yaml   # planner: SPEC → DAG\nforge lint tasks.draft.yaml                           # контракт + порядок acceptance\nforge run --tasks tasks.draft.yaml --target ./shortener --spec ./shortener/SPEC.md --dry-run\nforge run --tasks tasks.draft.yaml --target ./shortener --spec ./shortener/SPEC.md\nforge accept models-layer && forge resume run-…       # гейт после каркаса\nforge report --plain                                  # итог простым языком",
+    "essence": {
+      "en": "Tasks go by DAG: models → storage → API → tests → docs. Tests are a separate task after code (prompts/10, item 5), acceptance for each task is passed at its position. Each `gate` is a point where a person reviews the diff.",
+      "ru": "Задачи идут по DAG: модели → хранилище → API → тесты → docs. Тесты — отдельной задачей после кода (prompts/10, п.5), acceptance каждой задачи проходим на её позиции. Каждый `gate` — точка, где человек смотрит diff."
+    }
+  },
+  {
+    "n": 2,
+    "title": {
+      "en": "Contract-first: from OpenAPI contract to implementation",
+      "ru": "Contract-first: от OpenAPI-контракта к реализации"
+    },
+    "context": {
+      "en": "The team agreed on `openapi.yaml` with the frontend; the backend must comply with it. The contract is the source of truth; acceptance is contract tests.",
+      "ru": "Команда согласовала `openapi.yaml` с фронтендом; бэкенд должен ему соответствовать. Контракт — источник истины, acceptance — контрактные тесты."
+    },
+    "code": "forge wizard --target ./backend \\\n  --prompt \"реализуй эндпоинты по openapi.yaml; acceptance: schemathesis run openapi.yaml\"\n# wizard находит проверки, чертит задачу на группу эндпоинтов\nforge run --tasks ./backend/tasks.wizard.yaml --target ./backend\n# reviewer проверяет: код не выходит за scope, контрактные тесты зелёные\nforge accept users-endpoints && forge resume run-…",
+    "essence": {
+      "en": "Each task's scope is its own package of endpoints; `canon/` with openapi.yaml is read-only for the coder — the contract cannot be “tweaked to fit the code”.",
+      "ru": "Scope каждой задачи — свой пакет эндпоинтов; `canon/` с openapi.yaml — read-only для coder'а, контракт нельзя «подправить под код»."
+    }
+  },
+  {
+    "n": 3,
+    "title": {
+      "en": "New microservice in an existing monorepo with canon",
+      "ru": "Новый микросервис в существующей монорепе с каноном"
+    },
+    "context": {
+      "en": "The monorepo has `canon/decisions.json` (ADR, conventions). A new service must follow them, not invent its own.",
+      "ru": "В монорепе есть `canon/decisions.json` (ADR, соглашения). Новый сервис обязан им следовать, а не изобретать свои."
+    },
+    "code": "forge wizard --target ./monorepo --prompt \"новый сервис billing по canon-решениям\"\n# в tasks.wizard.yaml добавляем вручную: canon_snapshot: canon/decisions.json\nforge lint ./monorepo/tasks.wizard.yaml\nforge run --tasks ./monorepo/tasks.wizard.yaml --target ./monorepo",
+    "essence": {
+      "en": "`canon_snapshot` is attached to the prompt of each task; any attempt by the coder to write to `canon/` is blocked by the tool and logged as SCOPE_VIOLATION.",
+      "ru": "`canon_snapshot` прикладывается к промпту каждой задачи; попытка coder'а писать в `canon/` блокируется инструментом и пишется в журнал как SCOPE_VIOLATION."
+    }
+  },
+  {
+    "n": 4,
+    "title": {
+      "en": "Legacy without tests: first groundwork, then agents",
+      "ru": "Легаси без тестов: сначала земля, потом агенты"
+    },
+    "context": {
+      "en": "An 8-year-old Django project, no tests, “works — don’t touch”. The first pass of agents is not features, but testability.",
+      "ru": "8-летний Django-проект, тестов нет, «работает — не трогай». Первый заход агентов — не фичи, а проверяемость."
+    },
+    "code": "forge init --target ./legacy-shop          # baseline КРАСНЫЙ: проверок нет\nforge wizard --target ./legacy-shop --recipe test-coverage\n# ? модуль → src/payments · команда → python -m pytest -q   (без LLM, $0)\nforge run --tasks ./legacy-shop/tasks.wizard.yaml --target ./legacy-shop\nforge accept cover-payments && forge resume run-…",
+    "essence": {
+      "en": "Baseline honestly says “there is nothing to check with” before spending on models. The first task writes tests against existing code — acceptance runs the new tests against the old code. Only after that does refactoring make sense.",
+      "ru": "Baseline честно говорит «проверять нечем» до трат на модели. Первая задача пишет тесты на существующий код — acceptance прогоняет новые тесты против старого кода. Только потом имеет смысл рефакторинг."
+    }
+  },
+  {
+    "n": 5,
+    "title": {
+      "en": "Legacy migration: port by module with parity",
+      "ru": "Легаси-миграция: порт по модулю с паритетом"
+    },
+    "context": {
+      "en": "Porting a validator from Python to TypeScript; the requirement is bit-for-bit behavioral parity. One module = one task.",
+      "ru": "Перенос валидатора с Python на TypeScript; требование — побитовый паритет поведения. Один модуль = одна задача."
+    },
+    "code": "# tasks.yaml руками: acceptance — прогон golden-наборов через обе реализации\nforge lint tools/migration.tasks.yaml\nforge run --tasks tools/migration.tasks.yaml --target ./repo --dry-run   # прогноз\nforge run --tasks tools/migration.tasks.yaml --target ./repo",
+    "essence": {
+      "en": "Acceptance compares the output of the old and new implementations on golden data: parity is proven by a test, not by model assurances. A red run → repair cycle (≤3 iterations), then `failed` with a log, not a silent merge.",
+      "ru": "Acceptance сравнивает вывод старой и новой реализации на golden-данных: паритет доказан тестом, а не уверениями модели. Красный прогон → repair-цикл (≤3 итераций), дальше — `failed` с журналом, а не тихий merge."
+    }
+  },
+  {
+    "n": 6,
+    "title": {
+      "en": "Brownfield with documentation: AGENTS.md already exists",
+      "ru": "Brownfield с документацией: AGENTS.md уже есть"
+    },
+    "context": {
+      "en": "The repository maintains AGENTS.md (stack, commands, conventions) and docs/SPEC.md. The tool reads what is already written.",
+      "ru": "В репозитории ведут AGENTS.md (стек, команды, соглашения) и docs/SPEC.md. Инструмент читает то, что уже написано."
+    },
+    "code": "forge import --spec ./repo/docs/SPEC.md --out tasks.draft.yaml\nforge lint tasks.draft.yaml\nforge run --tasks tasks.draft.yaml --target ./repo --spec ./repo/docs/SPEC.md",
+    "essence": {
+      "en": "AGENTS.md from the target root is included in the coder’s context — it writes according to the project’s conventions, not “the average across GitHub”. `--spec` attaches an excerpt of the spec to each task prompt.",
+      "ru": "AGENTS.md из корня target попадает в контекст coder'а — он пишет в соглашениях проекта, а не «в среднем по GitHub». `--spec` прикладывает выдержку спеки к промпту каждой задачи."
+    }
+  },
+  {
+    "n": 7,
+    "title": {
+      "en": "Vibe-code: a project generated “on the knee” by another AI",
+      "ru": "Vibe-code: проект сгенерирован «на коленке» другим AI"
+    },
+    "context": {
+      "en": "A prototype from another AI tool: the code works, but there is no structure, no tests, checks do not run. The task is to turn it into something maintainable.",
+      "ru": "Прототип от другого AI-инструмента: код работает, но структуры нет, тестов нет, проверки не запускаются. Задача — превратить в поддерживаемое."
+    },
+    "code": "forge init --target ./vibe-app --profile careful     # baseline красный — честный стоп\n# человек сначала чинит запуск проверок (один раз, руками)\nforge wizard --target ./vibe-app \\\n  --prompt \"разбей god-object app.py на модули, сверху pytest-тесты\" --profile careful\nforge run --tasks ./vibe-app/tasks.wizard.yaml --target ./vibe-app\n# careful: кап $0.30/задача и гейт после каждой — полный контроль над хаосом\nforge accept split-config && forge resume run-…",
+    "essence": {
+      "en": "Wizard does not invent checks: it takes only the ones found in the repo. Acceptance that cannot pass yet (pytest before tests exist) is dropped from the draft with a warning — DISPUTE does not happen out of nowhere.",
+      "ru": "Wizard не выдумывает проверки: берёт только найденные в репо. Acceptance, который ещё не может пройти (pytest до появления тестов), выкидывается из черновика с предупреждением — DISPUTE на пустом месте не случается."
+    }
+  },
+  {
+    "n": 8,
+    "title": {
+      "en": "Someone else’s AI-driven practice: specs from spec-kit / BMAD",
+      "ru": "Чужая AI-driven практика: спеки от spec-kit / BMAD"
+    },
+    "context": {
+      "en": "The project was run under another methodology: a `specs/` directory with someone else’s feature format, partially implemented, architecture partially broken.",
+      "ru": "Проект вели по другой методологии: каталог `specs/` с чужим форматом фич, часть реализована, часть — нет, архитектура местами сломана."
+    },
+    "code": "forge import --spec ./repo/specs/004-export/SPEC.md --out tasks.draft.yaml\n# гейт №1: человек вычитывает черновик — planner честно выносит противоречия\nforge lint tasks.draft.yaml        # предупредит о непроходимом acceptance\nforge run --tasks tasks.draft.yaml --target ./repo",
+    "essence": {
+      "en": "If the spec diverges from the code, the repair agent does not “guess”: a DISPUTE marker → task in `blocked`, the decision is made by a human (`forge accept` as override or spec edit). Contradictions are not hidden — this is a principle of the tool.",
+      "ru": "Если спека расходится с кодом, repair-агент не «додумывает»: маркер DISPUTE → задача в `blocked`, решение принимает человек (`forge accept` как override или правка спеки). Противоречия не прячутся — это принцип инструмента."
+    }
+  },
+  {
+    "n": 9,
+    "title": {
+      "en": "Multi-repo: one change in five services",
+      "ru": "Мульти-репо: одно изменение в пяти сервисах"
+    },
+    "context": {
+      "en": "Changing the auth token format affects 5 repositories. The same queue is run against each — separate branches, logs, cost.",
+      "ru": "Смена формата auth-токена затрагивает 5 репозиториев. Одна и та же очередь прогоняется по каждому — отдельные ветки, журналы, стоимость."
+    },
+    "code": "for repo in api gateway billing notify web; do\n  forge run --tasks token-v2.tasks.yaml --target ./$repo\ndone\nforge report run-…    # по каждому прогону: стоимость, состояние, repair'ы\nforge ui              # канбан всех прогонов разом, только чтение",
+    "essence": {
+      "en": "No push: branches `forge/<task-id>` and commits are local; the owner publishes them (NFR-5). The per-day cap is summed across all runs of the day — the budget won’t drift.",
+      "ru": "Никакого push: ветки `forge/<task-id>` и коммиты локальные, публикует владелец (NFR-5). per-day кап суммируется по всем прогонам суток — бюджет не разъедется."
+    }
+  },
+  {
+    "n": 10,
+    "title": {
+      "en": "Documentation drift after AI sprints",
+      "ru": "Дрейф документации после AI-спринтов"
+    },
+    "context": {
+      "en": "Several code-generation sprints — README and ANALYTICS have fallen behind the code. The docs-sync recipe restores sync without invoking the planner.",
+      "ru": "Несколько спринтов кодогенерации — README и ANALYTICS отстали от кода. Рецепт docs-sync возвращает синхрон без вызова планировщика."
+    },
+    "code": "forge wizard --target ./repo --recipe docs-sync       # детерминированно, $0\nforge run --tasks ./repo/tasks.wizard.yaml --target ./repo\nforge report --plain   # «Сделано 2 из 2: README, ANALYTICS — $0.07»\nforge ui               # визуальный контроль: что когда починялось",
+    "essence": {
+      "en": "Acceptance for docs tasks is not tests but owner checks (markdown linter, executing the README examples). The tool does not care what gates a task — as long as the command is honest and turns green.",
+      "ru": "Acceptance для docs-задач — не тесты, а проверки владельца (линтер markdown, прогон примеров из README). Инструменту всё равно, что гейтит задачу, — лишь бы команда была честной и зеленела."
+    }
+  }
+];
+const I18N = {
+  en: {
+    title: "10 Field Guides: agent-forge in Real Work",
+    lead: "From greenfield spec-driven builds and legacy integration to rescuing someone else's vibe-code, each scenario includes a real forge command chain.",
+    skelTitle: "The Common Skeleton",
+    essenceLabel: "Why it works",
+    docsLabel: "Docs",
+    skel: [
+      "1. Prepare: forge init / wizard / import — a human confirms the draft (gate #1)",
+      "2. Pre-flight: forge lint + forge run --dry-run",
+      "3. Run: forge run — coder, acceptance, reviewer, repair, budget caps",
+      "4. Gates: forge accept / resume; owner override for blocked",
+      "5. Control: forge status / log / report --plain / ui"
+    ]
+  },
+  ru: {
+    title: "10 полевых сценариев: agent-forge в реальной работе",
+    lead: "От greenfield-разработки по спецификации и внедрения в легаси до спасения чужого vibe-code — каждый сценарий включает реальную цепочку команд forge.",
+    skelTitle: "Общий скелет любого сценария",
+    essenceLabel: "Суть",
+    docsLabel: "Документация",
+    skel: [
+      "1. Подготовка: forge init / wizard / import — человек подтверждает черновик (гейт №1)",
+      "2. Предполётная проверка: forge lint + forge run --dry-run",
+      "3. Запуск: forge run — coder, acceptance, reviewer, repair, лимиты бюджета",
+      "4. Гейты: forge accept / resume; владелец может разблокировать вручную",
+      "5. Контроль: forge status / log / report --plain / ui"
+    ]
+  }
+};
+let lang = "en";
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function renderCases() {
+  const t = I18N[lang];
+  const root = document.getElementById("cases");
+  root.textContent = "";
+  for (const s of SCENARIOS) {
+    const sec = el("section", "case");
+    sec.appendChild(el("span", "n", String(s.n).padStart(2, "0")));
+    sec.appendChild(el("h2", "", s.title[lang]));
+    sec.appendChild(el("p", "ctx", s.context[lang]));
+    const term = el("pre", "term");
+    for (const line of s.code.split("\n")) {
+      const row = document.createElement("div");
+      if (line.startsWith("$")) {
+        row.appendChild(el("span", "p", "$"));
+        row.appendChild(document.createTextNode(line.slice(1)));
+      } else {
+        row.textContent = line;
+      }
+      term.appendChild(row);
+    }
+    sec.appendChild(term);
+    if (s.essence[lang]) {
+      sec.appendChild(el("p", "essence", t.essenceLabel + ": " + s.essence[lang]));
+    }
+    root.appendChild(sec);
+  }
+}
+
+function renderFooter() {
+  const t = I18N[lang];
+  const box = document.getElementById("footLinks");
+  box.textContent = "";
+  const base = "https://github.com/Xarawg/agent-forge/blob/master/docs/";
+  const ext = lang === "ru" ? ".ru.md" : ".md";
+  const docs = [["USECASES", "USECASES"], ["SPEC", "SPEC"], ["CONFIGURATION", "CONFIGURATION"]];
+  const label = el("strong", "", t.docsLabel + ": ");
+  box.appendChild(label);
+  docs.forEach(([name, file], i) => {
+    if (i) box.appendChild(document.createTextNode(" · "));
+    const a = el("a", "", name.toLowerCase() + ext);
+    a.href = base + file + ext;
+    box.appendChild(a);
+  });
+}
+
+function setLang(l) {
+  lang = l;
+  document.documentElement.lang = l;
+  const t = I18N[l];
+  document.getElementById("langBtn").textContent = l === "en" ? "RU" : "EN";
+  document.getElementById("tTitle").textContent = t.title;
+  document.getElementById("tLead").textContent = t.lead;
+  document.getElementById("tSkel").textContent = t.skelTitle;
+  const list = document.getElementById("skelList");
+  list.textContent = "";
+  for (const step of t.skel) list.appendChild(el("li", "", step));
+  renderCases();
+  renderFooter();
+}
+
+document.getElementById("langBtn").addEventListener("click", () => {
+  setLang(lang === "en" ? "ru" : "en");
+});
+
+setLang("en");
+
+</script>
+</body>
+</html>

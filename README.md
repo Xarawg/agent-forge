@@ -114,6 +114,8 @@ forge report --plain                  # plain-language summary
 forge ui                              # kanban dashboard on http://127.0.0.1:8765
 ```
 
+Ten real-world field scenarios with full command chains — greenfield spec-first builds, contract-first APIs, legacy integration, vibe-code rescue, docs drift and more: [docs/USECASES.md](docs/USECASES.md). The same ten as an illustrated bilingual guide: [docs/cases.html](docs/cases.html) (open raw or serve via GitHub Pages).
+
 ## Command Reference
 
 | Command | Purpose |

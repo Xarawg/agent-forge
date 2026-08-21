@@ -1,7 +1,7 @@
-"""Сборка GitHub Pages: site/index.html → docs/index.html.
+"""Сборка GitHub Pages: site/*.html → docs/*.html (index, cases).
 
-Единственный источник правды — site/index.html. Скрипт копирует его в
-docs/index.html (каталог, который деплоит .github/workflows/pages.yml),
+Единственный источник правды — site/. Скрипт копирует страницы в
+docs/ (каталог, который деплоит .github/workflows/pages.yml),
 добавляет generated-заголовок и проверяет инварианты:
 
 - нет служебных маркеров дизайн-референсов в CSS-комментариях;
@@ -18,8 +18,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "site" / "index.html"
-DST = ROOT / "docs" / "index.html"
+PAGES = ["index.html", "cases.html"]
 
 HEADER = "<!-- GENERATED from site/index.html by site/build_pages.py — do not edit -->\n"
 
@@ -31,21 +30,30 @@ _RELATIVE_MD = re.compile(r'href="(?!https?://|#|mailto:)[^"]*\.md"')
 
 
 def main() -> int:
-    html = SRC.read_text(encoding="utf-8")
-    problems: list[str] = []
-    for match in _FORBIDDEN.finditer(html):
-        line = html.count("\n", 0, match.start()) + 1
-        problems.append(f"служебный маркер на строке {line}: {match.group(0)!r}")
-    for match in _RELATIVE_MD.finditer(html):
-        line = html.count("\n", 0, match.start()) + 1
-        problems.append(f"относительная ссылка на .md на строке {line}: {match.group(0)!r}")
-    if problems:
-        for p in problems:
-            print(f"ERROR: {p}", file=sys.stderr)
-        return 1
-    DST.write_text(HEADER + html, encoding="utf-8")
-    print(f"OK: {DST.relative_to(ROOT)} ({len(html)} chars)")
-    return 0
+    rc = 0
+    for name in PAGES:
+        src = ROOT / "site" / name
+        dst = ROOT / "docs" / name
+        if not src.exists():
+            print(f"ERROR: нет исходника {src}", file=sys.stderr)
+            rc = 1
+            continue
+        html = src.read_text(encoding="utf-8")
+        problems: list[str] = []
+        for match in _FORBIDDEN.finditer(html):
+            line = html.count("\n", 0, match.start()) + 1
+            problems.append(f"служебный маркер на строке {line}: {match.group(0)!r}")
+        for match in _RELATIVE_MD.finditer(html):
+            line = html.count("\n", 0, match.start()) + 1
+            problems.append(f"относительная ссылка на .md на строке {line}: {match.group(0)!r}")
+        if problems:
+            for p in problems:
+                print(f"ERROR [{name}]: {p}", file=sys.stderr)
+            rc = 1
+            continue
+        dst.write_text(HEADER + html, encoding="utf-8")
+        print(f"OK: {dst.relative_to(ROOT)} ({len(html)} chars)")
+    return rc
 
 
 if __name__ == "__main__":

@@ -362,6 +362,7 @@
     <a href="#how" data-i18n="nav_how">How it works</a>
     <a href="#commands" data-i18n="nav_cmd">Commands</a>
     <a href="#start" data-i18n="nav_start">Quick start</a>
+    <a href="cases.html" data-i18n="nav_cases">Field guides</a>
   </div>
   <button class="lang-switch" id="langSwitch">RU</button>
 </nav>
@@ -811,6 +812,7 @@ forge ui                   <span class="cm"># kanban on http://127.0.0.1:8765</s
       </div>
       <div>
         <h4 data-i18n="footer_project">Project</h4>
+        <a href="cases.html" data-i18n="footer_cases">Field guides</a>
         <a data-doc data-en="README.md" data-ru="README.ru.md" href="https://github.com/Xarawg/agent-forge#readme">README</a>
         <a href="https://github.com/Xarawg/agent-forge">GitHub</a>
         <a href="https://github.com/Xarawg/agent-forge/blob/master/LICENSE">License</a>
@@ -830,7 +832,7 @@ forge ui                   <span class="cm"># kanban on http://127.0.0.1:8765</s
 /* ===== i18n ===== */
 const I18N = {
   en: {
-    nav_demo: "Demo", nav_scen: "Start here", nav_how: "How it works", nav_cmd: "Commands", nav_start: "Quick start",
+    nav_demo: "Demo", nav_scen: "Start here", nav_how: "How it works", nav_cmd: "Commands", nav_start: "Quick start", nav_cases: "Field guides",
     hero_lead: "Point it at any repository, say what you want in plain words, and get a confirmed setup — tasks, tests, budgets — driven through LLM agents with real test gates, second-model review, hard budget caps, and a full on-disk audit trail.",
     btn_start: "Get Started", btn_scen: "Pick Your Scenario",
     p1_title: "Task Queue", p1_desc: "Drafted by wizard or hand-written",
@@ -902,10 +904,10 @@ const I18N = {
     why_7_title: "Honest Stops", why_7_p: "DISPUTE / STUCK / BLOCKED markers halt a task visibly when spec and reality disagree — a human resolves contradictions, never the model.",
     why_8_title: "Resumable Runs", why_8_p: "Dialogue history is snapshotted after every agent step. Kill the process, reboot, come back tomorrow — forge resume picks up mid-task with context intact.",
     why_9_title: "Plain-Language Reports", why_9_p: "forge report --plain answers three questions — what got done, what failed, what to do next — without reading a single YAML file.",
-    footer_tag: "Controlled LLM code generation.", footer_docs: "Docs", footer_project: "Project", footer_meta: "Meta"
+    footer_tag: "Controlled LLM code generation.", footer_docs: "Docs", footer_project: "Project", footer_meta: "Meta", footer_cases: "Field guides"
   },
   ru: {
-    nav_demo: "Демо", nav_scen: "С чего начать", nav_how: "Как работает", nav_cmd: "Команды", nav_start: "Быстрый старт",
+    nav_demo: "Демо", nav_scen: "С чего начать", nav_how: "Как работает", nav_cmd: "Команды", nav_start: "Быстрый старт", nav_cases: "Полевые сценарии",
     hero_lead: "Натрави на любой репозиторий, скажи своими словами, что нужно, и получи подтверждённую настройку — задачи, тесты, бюджеты, — которую LLM-агенты прогонят через реальные тестовые гейты, ревью второй моделью, жёсткие бюджетные капы и полный журнал на диске.",
     btn_start: "Начать", btn_scen: "Выбрать сценарий",
     p1_title: "Очередь задач", p1_desc: "Черновик wizard'а или ручной YAML",
@@ -977,7 +979,7 @@ const I18N = {
     why_7_title: "Честные остановки", why_7_p: "Маркеры DISPUTE / STUCK / BLOCKED явно останавливают задачу, когда спека расходится с реальностью, — противоречия разрешает человек, а не модель.",
     why_8_title: "Возобновляемые прогоны", why_8_p: "История диалога снапшотится после каждого шага агента. Убей процесс, перезагрузись, вернись завтра — forge resume подхватит задачу посреди фазы с полным контекстом.",
     why_9_title: "Отчёты простым языком", why_9_p: "forge report --plain отвечает на три вопроса — что сделано, что не получилось, что делать дальше, — без чтения единого YAML-файла.",
-    footer_tag: "Управляемая агентная кодогенерация.", footer_docs: "Доки", footer_project: "Проект", footer_meta: "Мета"
+    footer_tag: "Управляемая агентная кодогенерация.", footer_docs: "Доки", footer_project: "Проект", footer_meta: "Мета", footer_cases: "Полевые сценарии"
   }
 };
 
