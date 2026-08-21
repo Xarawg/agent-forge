@@ -49,9 +49,36 @@ def test_wizard_logs_planner_call(cfg, target: Path) -> None:
 
 def test_normalize_fills_acceptance_from_scan() -> None:
     raw = {"tasks": [{"id": "t1", "title": "x", "spec_ref": "s", "scope_paths": ["src/**"]}]}
-    tasks, warnings = _normalize(raw, get_profile("normal"), ["python -m pytest -q"])
+    tasks, warnings = _normalize(raw, get_profile("normal"), ["python -m pytest -q"],
+                                 existing_tests=True)
     assert tasks[0]["acceptance"] == ["python -m pytest -q"]
     assert any("acceptance" in w for w in warnings)
+
+
+def test_normalize_strips_test_acceptance_before_tests_exist() -> None:
+    """Acceptance обязан проходить на позиции задачи в DAG: pytest до появления
+    тестов гарантированно падает (exit 5) — wizard убирает такую проверку."""
+    raw = {"tasks": [
+        {"id": "t1-code", "title": "x", "spec_ref": "s", "scope_paths": ["src/**"],
+         "acceptance": ["python -m pytest -q", "python -c \"import src\""]},
+        {"id": "t2-tests", "title": "y", "spec_ref": "s", "scope_paths": ["tests/**"],
+         "depends_on": ["t1-code"], "acceptance": ["python -m pytest -q"]},
+    ]}
+    tasks, warnings = _normalize(raw, get_profile("normal"), [], existing_tests=False)
+    by_id = {t["id"]: t for t in tasks}
+    # у ранней задачи тестовая команда убрана, не-тестовая осталась
+    assert by_id["t1-code"]["acceptance"] == ["python -c \"import src\""]
+    # задача, пишущая тесты, и все после неё сохраняют pytest
+    assert by_id["t2-tests"]["acceptance"] == ["python -m pytest -q"]
+    assert any("убран" in w and "t1-code" in w for w in warnings)
+
+
+def test_normalize_keeps_test_acceptance_when_repo_has_tests() -> None:
+    raw = {"tasks": [{"id": "t1", "title": "x", "spec_ref": "s", "scope_paths": ["src/**"],
+                      "acceptance": ["python -m pytest -q"]}]}
+    tasks, warnings = _normalize(raw, get_profile("normal"), [], existing_tests=True)
+    assert tasks[0]["acceptance"] == ["python -m pytest -q"]
+    assert not any("убран" in w for w in warnings)
 
 
 def test_normalize_warns_on_empty_acceptance_without_scan() -> None:

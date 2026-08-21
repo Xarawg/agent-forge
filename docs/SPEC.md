@@ -57,7 +57,7 @@ The owner can go from "a folder with a project" to a confirmed run without hand-
 - `forge wizard` — drafts a complete setup (`tasks.wizard.yaml`: tasks, scopes, acceptance from detected checks, profile budgets, gates) from a plain-words `--prompt` / `--prompt-file`; on an ambiguous request the planner answers with a `QUESTIONS:` block and the wizard asks interactively (`--yes` = defaults). Prints a cost forecast before anything runs.
 - `forge wizard --recipe NAME` — deterministic rendering of `config/recipes/*.yaml` (`feature`, `test-coverage`, `docs-sync`) with `{placeholder}` substitution; no LLM call.
 - Cap profiles (`careful` / `normal` / `fast`) preset per-task budgets and gate density; default is `careful`.
-- Pre-flight: `forge lint <tasks.yaml>` (contract errors + frozen-acceptance advice) and `forge run --dry-run` (queue cost forecast; nothing executes).
+- Pre-flight: `forge lint <tasks.yaml>` (contract errors + frozen-acceptance and acceptance-order advice: a test command must be passable at the task's DAG position) and `forge run --dry-run` (queue cost forecast; nothing executes). The wizard strips not-yet-passable test acceptance from drafts; the planner prompt carries the same rule.
 - Every draft is confirmed by a human before launch (gate #1) — in the terminal or as task cards in the UI (`/wizard?file=<draft>`).
 
 ## 4. Non-Functional Requirements

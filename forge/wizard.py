@@ -18,7 +18,13 @@ from .agents import log_model_call
 from .config import ForgeConfig
 from .detect import render_baseline, render_scan, run_baseline, scan_repo
 from .journal import Journal, new_run_id
-from .lint import test_scope_warnings
+from .lint import (
+    _topo_ids,
+    has_existing_tests,
+    is_test_command,
+    scope_covers_tests,
+    test_scope_warnings,
+)
 from .llm import LLMClient
 from .models import load_tasks
 from .profiles import DEFAULT_PROFILE, Profile, get_profile
@@ -69,8 +75,35 @@ def _fix_dir_scopes(task: dict[str, Any], warnings: list[str]) -> None:
         task["scope_paths"] = fixed
 
 
+def _fix_acceptance_order(
+    tasks: list[dict[str, Any]], existing_tests: bool, warnings: list[str]
+) -> None:
+    """Acceptance обязан проходить на позиции задачи в DAG (живой прогон
+    2026-08-21: `pytest -q` до появления тестов падает с exit 5 → гарантированный
+    DISPUTE). Убираем тестовые команды у задач, идущих раньше тестов; задаче,
+    которая сама пишет тесты, и всем после неё — оставляем."""
+    tests_available = existing_tests
+    for task in _topo_ids(tasks):
+        writes_tests = scope_covers_tests(task)
+        if not tests_available and not writes_tests and task.get("acceptance"):
+            kept: list[str] = []
+            for command in task["acceptance"]:
+                if is_test_command(str(command)):
+                    warnings.append(
+                        f"⚠ {task.get('id', '?')}: acceptance {command!r} убран — на этой "
+                        "позиции DAG тестов ещё нет (они появятся в поздней задаче), "
+                        "проверка гарантированно упала бы. Добавьте smoke-проверку "
+                        "(импорт/сборка) вручную при желании."
+                    )
+                else:
+                    kept.append(command)
+            task["acceptance"] = kept
+        if writes_tests:
+            tests_available = True
+
+
 def _normalize(
-    raw: Any, profile: Profile, scan_commands: list[str]
+    raw: Any, profile: Profile, scan_commands: list[str], existing_tests: bool = False
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Заполнить пробелы черновика: капы из профиля, acceptance из скана, гейты."""
     warnings: list[str] = []
@@ -101,6 +134,7 @@ def _normalize(
         if profile.gate_every_task and not task.get("gate"):
             task["gate"] = "review"
         tasks.append(task)
+    _fix_acceptance_order(tasks, existing_tests, warnings)
     warnings.extend(test_scope_warnings(tasks))
     return tasks, warnings
 
@@ -262,7 +296,9 @@ def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str,
     raw, parse_error = _try_parse_yaml(draft)
     if parse_error is not None:
         raw = None  # ответ planner'а — не YAML; сохраним как есть, пользователь поправит
-    tasks, warnings = _normalize(raw, profile, scan_repo(root).test_commands)
+    tasks, warnings = _normalize(
+        raw, profile, scan_repo(root).test_commands, has_existing_tests(root)
+    )
 
     header = (
         f"# Черновик от wizard (профиль {profile.name}). Промпт: {intent!r}\n"
@@ -380,7 +416,9 @@ def run_recipe(cfg: ForgeConfig, target: Path, recipe_name: str,
         answers[key] = answer
 
     rendered = _render_template(recipe["tasks"], answers)
-    tasks, warnings = _normalize({"tasks": rendered}, profile, scan_repo(root).test_commands)
+    tasks, warnings = _normalize(
+        {"tasks": rendered}, profile, scan_repo(root).test_commands, has_existing_tests(root)
+    )
     for question in recipe.get("questions") or []:
         if not answers.get(str(question["key"])):
             warnings.append(

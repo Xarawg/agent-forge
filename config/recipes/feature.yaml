@@ -21,8 +21,9 @@ tasks:
     scope_paths:
       - "{src_dir}/**"
     depends_on: []
-    acceptance:
-      - "{test_command}"
+    # Тестовая команда здесь невозможна: тесты появятся только в следующей
+    # задаче — pytest упал бы с exit 5. Smoke-проверку добавьте под стек.
+    acceptance: []
   - id: recipe-feature-tests
     title: "Тесты на: {feature}"
     spec_ref: "рецепт feature"
