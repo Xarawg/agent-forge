@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+
 from .journal import Journal
+from .models import TaskPackage, load_tasks, topo_order
 
 
 @dataclass
@@ -17,6 +20,7 @@ class TaskReport:
     cost_usd: float = 0.0
     repair_iterations: int = 0
     note: str = ""
+    gate: str | None = None
 
 
 @dataclass
@@ -40,25 +44,76 @@ def latest_run_id(runs_dir: Path) -> str | None:
     return runs[-1] if runs else None
 
 
+def _load_package(meta: dict[str, object]) -> TaskPackage | None:
+    """Очередь задач прогона из meta['tasks_path']; битый/отсутствующий путь — None."""
+    tasks_path = meta.get("tasks_path")
+    if not tasks_path:
+        return None
+    try:
+        return load_tasks(Path(str(tasks_path)))
+    except (OSError, ValueError, yaml.YAMLError):
+        return None
+
+
 def build_report(runs_dir: Path, run_id: str) -> RunReport:
     journal = Journal(runs_dir, run_id)
     report = RunReport(run_id=run_id, meta=journal.read_meta())
+
+    # Задачи с journal-записями (тронутые прогоном). Снапшоты диалога (AF-12) — мимо.
+    states: dict[str, TaskReport] = {}
     for state_path in sorted((journal.run_dir / "tasks").glob("*.json")):
         if ".history" in state_path.name:
             continue  # снапшоты диалога (AF-12) — не состояния задач
         state = journal.task_state(state_path.stem)
-        report.tasks.append(
-            TaskReport(
-                task_id=state.id,
-                state=state.state,
-                tokens_in=state.tokens_in,
-                tokens_out=state.tokens_out,
-                cost_usd=state.cost_usd,
-                repair_iterations=state.repair_iterations,
-                note=state.note,
-            )
+        states[state.id] = TaskReport(
+            task_id=state.id,
+            state=state.state,
+            tokens_in=state.tokens_in,
+            tokens_out=state.tokens_out,
+            cost_usd=state.cost_usd,
+            repair_iterations=state.repair_iterations,
+            note=state.note,
         )
+
+    package = _load_package(report.meta)
+    if package is None:
+        report.tasks = list(states.values())
+        return report
+
+    # Порядок прогона — топологический из tasks.yaml. Задачи без journal-записей
+    # ещё не трогались: они queued, но для честного «N из M» должны быть в отчёте.
+    report.tasks = []
+    for task in topo_order(package.tasks):
+        if task.id in states:
+            task_report = states[task.id]
+            task_report.gate = task.gate
+        else:
+            task_report = TaskReport(task_id=task.id, state="queued", gate=task.gate)
+        report.tasks.append(task_report)
+
+    # journal-записи, которых нет в пакете (старый/частичный tasks_path) — в конец.
+    seen = {t.task_id for t in report.tasks}
+    report.tasks.extend(tr for tr in states.values() if tr.task_id not in seen)
     return report
+
+
+def _gate_wait(report: RunReport) -> str | None:
+    """id гейт-задачи, ожидающей `forge accept` (SPEC.md §FR-4, гейт №3).
+
+    Прогон стоит на человеческом гейте, если первая недовершённая задача в
+    topo_order идёт после done-задачи с gate, которой нет в accepted.
+    """
+    accepted_raw = report.meta.get("accepted")
+    accepted = set(accepted_raw) if isinstance(accepted_raw, list) else set()
+    first_pending = next((t for t in report.tasks if t.state != "done"), None)
+    if first_pending is None:
+        return None
+    for task in report.tasks:
+        if task is first_pending:
+            break
+        if task.gate and task.state == "done" and task.task_id not in accepted:
+            return task.task_id
+    return None
 
 
 def render_status(report: RunReport) -> str:
@@ -75,6 +130,12 @@ def render_status(report: RunReport) -> str:
         )
     if not report.tasks:
         lines.append("(задач пока нет)")
+    gate_holder = _gate_wait(report)
+    if gate_holder:
+        lines.append(
+            f"⏸ Прогон ждёт решения: forge accept {gate_holder} "
+            f"&& forge resume {report.run_id}"
+        )
     return "\n".join(lines)
 
 

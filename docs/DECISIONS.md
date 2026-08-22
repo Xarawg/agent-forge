@@ -85,3 +85,7 @@ Pilot coder installed node_modules (tsx/esbuild) and wrote tsx test bridge despi
 ## AF-17. Remote transport: `DOCKER_HOST=ssh://` only (v3)
 
 **Decision (owner, 2026-08-21):** remote execution reuses the Docker executor against a remote daemon via `DOCKER_HOST=ssh://user@host` — one sandbox code path, local or remote. A pure-SSH executor (no Docker on target host) is deferred until a real need appears. LLM keys never leave the control plane; only files and commands travel to the remote host.
+
+## AF-18. DAG stop rule: dependents of non-done tasks never start
+
+**Decision (owner, 2026-08-22):** found by dogfooding — a task whose `depends_on` dependency ended `blocked`/`failed` used to start anyway. Now the run stops before such a task and waits for the owner to resolve the dependency (`forge accept` or spec edit, then `forge resume`). Same dogfooding run: `forge status` prints an explicit gate hint (`⏸ … forge accept <id> && forge resume <run_id>`), and `forge report` counts "done N of M" against the full tasks.yaml queue (untouched tasks included as `queued`).

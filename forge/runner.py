@@ -79,6 +79,17 @@ class Runner:
                     note=f"run paused: ждёт `forge accept {gate_holder}` (человеческий гейт №3)",
                 )
                 break
+            blocker = self._unmet_dependency(journal, task)
+            if blocker:
+                journal.event(
+                    task_id=task.id, phase="gate",
+                    note=(
+                        f"run paused: зависимость {blocker} не в done — задача не стартует. "
+                        f"Разрешите {blocker} (`forge accept {blocker}` или правка спеки), "
+                        f"затем `forge resume {run_id}`"
+                    ),
+                )
+                break
             self._run_task(journal, package, task, spec_path)
             if self._run_cost(journal) >= self.cfg.budgets.per_run_max_cost_usd:
                 journal.event(phase="budget", note="per-run кап стоимости достигнут, прогон остановлен")
@@ -298,6 +309,18 @@ class Runner:
             if task.gate and task.id not in accepted:
                 if journal.task_state(task.id).state == "done":
                     return task.id
+        return None
+
+    @staticmethod
+    def _unmet_dependency(journal: Journal, task: Task) -> str | None:
+        """id первой зависимости не в состоянии done (failed/blocked/ещё не бежала).
+
+        Задача, чья зависимость сломана или спорна, не стартует — прогон
+        останавливается до решения владельца (dogfooding-находка 2026-08-22).
+        """
+        for dep in task.depends_on:
+            if journal.task_state(dep).state != "done":
+                return dep
         return None
 
     def _git(self, *args: str) -> tuple[int, str]:

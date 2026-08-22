@@ -41,6 +41,7 @@ After coder: run task's `acceptance` commands (tests/lint/validators — trusted
 - CLI commands: `forge status` (run task table), `forge log <task_id>`, `forge resume <run_id>` (continue after stop), `forge report` (summary: tokens, cost, duration; `--plain` — plain-language outcome: done / failed / what next).
 - Web UI `forge ui`: kanban board, task event log viewer, run report, wizard-draft editor (`/wizard?file=<draft>`); read-only `runs/` except the draft editor writing back the same draft file.
 - Human gate #3: merge task branch — only via explicit `forge accept <task_id>`. Owner override: `forge accept` on a `blocked`/`failed` task marks it `done` with an `override` note (a task that hit a cumulative per-task cap could otherwise never recover).
+- DAG safety: a task whose `depends_on` dependency is not `done` never starts — the run stops and waits for the owner to resolve the dependency. `forge status` shows an explicit `⏸ … forge accept <id> && forge resume <run_id>` hint when the run stands at a human gate; `forge report` counts "done N of M" against the full tasks.yaml queue (untouched tasks included as `queued`).
 
 ### FR-5. Budget Caps
 Per-task (max_tokens / max_cost_usd), per-run (max_cost_usd), per-day (max_cost_usd, sum across all `runs/*/events.jsonl` for current UTC day). Exceeding → task `blocked`, reason in journal. Provider limits (RPM/5xx) handled with exponential backoff (`retry` in models.yaml) and `fallback_models` preset fallback.
