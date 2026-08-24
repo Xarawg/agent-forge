@@ -124,7 +124,10 @@ def init_project(target: Path, forge_root: Path, profile_name: str = DEFAULT_PRO
         f"     FORGE_MOCK=1 forge run --tasks {tasks_path.name} --target .",
         "  3. Или опишите задачу словами — черновик соберёт wizard:",
         "     forge wizard --target . --prompt \"что нужно сделать\"",
-        "  4. Наблюдение: forge status · forge ui · отчёт: forge report --plain",
+        "  4. Проект большой? Карта сущностей (детерминированно, $0) — модель получит",
+        "     анти-дубль каталог и сигнатуры соседей, не читая весь репозиторий:",
+        "     forge map --target .   # → canon/entities.json + docs/ENTITIES.md",
+        "  5. Наблюдение: forge status · forge ui · отчёт: forge report --plain",
     ]
     return "\n".join(lines)
 

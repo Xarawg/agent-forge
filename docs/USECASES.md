@@ -5,6 +5,127 @@ by specification to integration into legacy and someone else's vibe-code. The ch
 which forge commands a person issues and in what order; agents do everything else
 behind the gates. Русская версия: [USECASES.ru.md](USECASES.ru.md).
 
+---
+
+## 0. Deep dive: onboarding a large working project
+
+This is the reference case: an existing product, tens of thousands of lines,
+and you need to initialize its state for agent-forge, discover the important
+entities, and set the model up for minimal token spend — so that when a
+service is modified, the model sees the related models and contracts
+(otherwise it writes duplicates) but does not read unrelated files (otherwise
+money and attention degrade). Every step is dissected under the hood.
+
+Example project: `big-shop` — a Python monolith (FastAPI), ~200 modules,
+pytest exists, coverage partial, no AGENTS.md.
+
+### Step 0.1. Initialization: `forge init --target ./big-shop --profile careful`
+
+**Under the hood.** `forge/detect.py` scans the tree (no LLM): stack markers
+(`pyproject.toml`, `package.json`, `*.sln`, `go.mod`, `Cargo.toml`), CI
+configs (`.github/workflows/*` — the check commands your CI already treats as
+truth come from there), existing test commands. Then: `git init` if needed, a
+skeleton `tasks.yaml`, and crucially the **baseline**: the discovered checks
+run against the clean tree.
+
+**What the human sees.** `Baseline green — queue may start`, or an honest red
+stop listing the failing commands.
+
+**Why.** If `pytest` fails before agents touch anything, every task's
+acceptance will be red through no fault of the agent — and every run ends in
+a DISPUTE. Baseline guarantees: project problems are fixed by the human,
+agent problems are visible against a green background.
+
+**Typical failure.** "stack not detected" — no marker files: add
+`pyproject.toml`/a test command by hand (once), as in scenario 7.
+
+### Step 0.2. Entity map: `forge map --target ./big-shop`
+
+**Under the hood.** `forge/map.py` — a deterministic AST scan (not a single
+model call, $0): for each `.py` file it extracts public classes (with public
+method names) and top-level functions with signatures (no bodies), plus local
+imports resolved to project files. From imports it builds the file↔file
+relation graph.
+
+**Artifacts (committed to the repo):**
+- `canon/entities.json` — machine-readable catalog, read-only for agents;
+- `docs/ENTITIES.md` — human-readable map by directory (a new developer reads
+  it when joining, too).
+
+**Why this answers "lose nothing related, load nothing unrelated".** When
+modifying `services/orders.py`, the model does not read 200 files. It gets:
+full contents of scope files, a **name catalog of all entities** (anti-dup:
+"don't write `OrderModel`, it already exists"), and **signatures of import-
+graph neighbors** (`models/order.py`, `services/pricing.py` — contracts
+visible without reading whole files). Economics on the agent-forge repo
+itself (41 files, 213 entities): full read ≈ 250K chars; the map — an ~8K
+catalog + ~2K of neighbor signatures.
+
+**When to regenerate.** After every accepted run that changes the public
+surface: `forge map --target .` (seconds, $0).
+
+### Step 0.3. Conventions: AGENTS.md at big-shop's root
+
+One file of 20–40 lines: stack, check commands, conventions ("errors via
+`AppError`, no bare raise", "migrations via alembic, never edited by hand").
+Template — `prompts/60_target_AGENTS.md`. Under the hood: the runner attaches
+an AGENTS.md excerpt (up to 4K chars) to every task prompt — the cheapest way
+to make conventions visible to the model.
+
+### Step 0.4. Task draft: `forge wizard --target ./big-shop --prompt "…"`
+
+Prompt: "add CSV export of orders: endpoint in services/orders, with tests".
+
+**Under the hood.** The planner role receives the repo scan (stack, discovered
+checks, depth-limited tree) — not whole files — plus the acceptance-order rule
+(prompts/10, item 5): an acceptance command must be passable at the task's
+position in the DAG. The result is a `tasks.wizard.yaml` draft: a DAG of tasks
+with scopes, acceptance from **discovered** checks (the wizard never invents
+commands; not-yet-passable ones are dropped with a warning), budgets per the
+careful profile.
+
+**Gate #1.** The human opens the draft and edits: merge tasks, narrow scope,
+fix wording. `forge lint tasks.wizard.yaml` — contract checks plus advice
+(tests inside coder scope, unpassable acceptance, missing budgets).
+
+### Step 0.5. The run: `forge run --tasks tasks.wizard.yaml --target ./big-shop`
+
+**Under the hood, per task:**
+1. topo order by `depends_on`; a task whose dependency is not `done` never
+   starts (DAG stop rule, AF-18);
+2. a `forge/<task-id>` branch; commit after the reviewer gate, push only by
+   the human (NFR-5);
+3. coder prompt assembly: spec + canon excerpts (up to 30K) + the repo
+   context from steps 0.2–0.3 + scope + acceptance + repair history;
+4. the "model ↔ tools" loop: `read_file` / `list_dir` / `run_command`
+   (allowlist: python, pytest…; dependency installs blocked), `write_file`
+   only inside scope (violations → SCOPE_VIOLATION in the journal);
+5. automatic gate #2: acceptance commands (trusted, owner-written) → reviewer
+   per checklist → repair ≤ N iterations → `done | failed | blocked`;
+6. human gate #3: in the careful profile the run pauses after each task —
+   `forge status` shows `⏸ Run waits for a decision: forge accept <id> &&
+   forge resume <run_id>`.
+
+**Watching:** `forge status` (table + gate hint), `forge log <task-id>`
+(every model call with tokens and cost), `forge ui` (kanban),
+`forge report --plain` ("Done N of M · spent $X" — M counts the full queue,
+untouched tasks included).
+
+### Step 0.6. Typical failures and what to do
+
+| Symptom | Cause | Action |
+|---|---|---|
+| DISPUTE | spec contradiction / reviewer demands work outside scope | read `forge log`, clarify the spec or accept manually |
+| REJECT "no diff" | usually false: work already in the tree | inspect files by eye, `forge accept` (override) |
+| `per-task cap exhausted` | coder reads too much | narrow the scope, check `forge map` is fresh |
+| task never starts | dependency not done (AF-18) | resolve the dependency, `forge resume` |
+| acceptance red before agents | baseline was ignored | fix the project by hand, agents later |
+
+After all tasks are accepted: `forge map --target .` (fresh map),
+`forge report --plain`, review `git diff`, and push — manually.
+
+---
+
 ## 1. Greenfield: new service from specification to code
 
 **Context.** A startup writes a URL-shortener from scratch. First a person writes SPEC.md

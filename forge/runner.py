@@ -12,6 +12,7 @@ from .agents import parse_verdict, run_reviewer, run_tool_agent
 from .config import ForgeConfig
 from .journal import Journal, new_run_id
 from .llm import LLMClient
+from .map import build_repo_context
 from .models import Task, TaskPackage, TaskState, load_tasks, topo_order
 from .prompts import load_prompt, prompts_version, render
 from .tools import _WINDOWS_ENV_DEFAULTS, ToolBox
@@ -388,6 +389,9 @@ class Runner:
                 "package.name": package.name,
                 "spec_excerpt": spec_excerpt,
                 "canon_excerpt": canon_excerpt,
+                "repo_context": build_repo_context(self.target, task.scope_paths)
+                or "(нет — сгенерируйте `forge map --target .` "
+                "и/или добавьте AGENTS.md в корень репозитория)",
                 "task.scope_paths": "\n".join(f"- `{p}`" for p in task.scope_paths),
                 "task.acceptance": "\n".join(f"- `{c}`" for c in task.acceptance),
                 "history": history,

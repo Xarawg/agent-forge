@@ -2,6 +2,8 @@
 
 Controlled, serial LLM code generation over any OpenAI-compatible API — a queue of spec-driven tasks, real test gates, a second-model review, hard budget caps, and a full on-disk audit trail. Русская версия: [README.ru.md](README.ru.md).
 
+New here? Start with [ONBOARDING.md](ONBOARDING.md) (30 minutes from clone to first run). Choosing between LLM tooling? Read [docs/GUIDE_LLM.md](docs/GUIDE_LLM.md) — theory, open-source alternatives, and honest tradeoffs.
+
 ## Why
 
 Running "write me a feature" through an LLM is easy. Running *dozens* of such tasks against a real repository without losing control is not. agent-forge exists to make serial LLM codegen governable:
@@ -124,6 +126,7 @@ Ten real-world field scenarios with full command chains — greenfield spec-firs
 | `forge wizard --prompt "..." [--recipe NAME] [--profile ...] [--yes] [--out FILE] [--no-check]` | Draft a full setup (tasks/acceptance/budgets/gates) from a plain-words prompt, a prompt file, or a recipe |
 | `forge import --spec SPEC.md [--out FILE]` | Draft `tasks.yaml` from an existing specification via the planner |
 | `forge lint <tasks.yaml>` | Pre-flight validation: contract errors + acceptance advice (frozen scope, DAG-order passability) |
+| `forge map [--target DIR]` | Entity map of the project: deterministic AST scan → `canon/entities.json` (agents: anti-dup catalog + import neighbors) and `docs/ENTITIES.md` (humans). $0, no LLM |
 | `forge run --tasks F [--target DIR] [--spec SPEC.md] [--dry-run] [--provider PRESET]` | Run the queue; `--dry-run` prints a cost forecast and executes nothing |
 | `forge resume <run_id> [--target DIR]` | Continue a stopped/paused run from on-disk snapshots |
 | `forge status [run_id]` | Task table: state, tokens, cost, repairs, notes |

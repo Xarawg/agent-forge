@@ -1,0 +1,1614 @@
+{
+  "version": 1,
+  "generator": "forge map (AST, без LLM)",
+  "files": {
+    "forge/__init__.py": {
+      "entities": [],
+      "imports": []
+    },
+    "forge/__main__.py": {
+      "entities": [],
+      "imports": [
+        "forge/cli.py"
+      ]
+    },
+    "forge/agents.py": {
+      "entities": [
+        {
+          "name": "AgentOutcome",
+          "kind": "class",
+          "signature": "class AgentOutcome",
+          "line": 23
+        },
+        {
+          "name": "parse_marker",
+          "kind": "function",
+          "signature": "def parse_marker(content: str) -> str | None",
+          "line": 28
+        },
+        {
+          "name": "log_model_call",
+          "kind": "function",
+          "signature": "def log_model_call(journal: Journal, cfg: ForgeConfig, task_id: str | None, phase: str, role: str, result: ChatResult) -> float",
+          "line": 40
+        },
+        {
+          "name": "run_tool_agent",
+          "kind": "function",
+          "signature": "def run_tool_agent(client: LLMClient, cfg: ForgeConfig, journal: Journal, *, role: str, system_prompt: str, user_prompt: str, toolbox: ToolBox, task_id: str, phase: str, max_steps: int=MAX_AGENT_STEPS, history_path: Path | None=None) -> AgentOutcome",
+          "line": 79
+        },
+        {
+          "name": "run_reviewer",
+          "kind": "function",
+          "signature": "def run_reviewer(client: LLMClient, cfg: ForgeConfig, journal: Journal, *, system_prompt: str, review_prompt: str, task_id: str) -> str",
+          "line": 171
+        },
+        {
+          "name": "parse_verdict",
+          "kind": "function",
+          "signature": "def parse_verdict(review_text: str) -> str",
+          "line": 191
+        }
+      ],
+      "imports": [
+        "forge/config.py",
+        "forge/journal.py",
+        "forge/llm.py",
+        "forge/tools.py"
+      ]
+    },
+    "forge/cli.py": {
+      "entities": [
+        {
+          "name": "cmd_run",
+          "kind": "function",
+          "signature": "def cmd_run(args: argparse.Namespace) -> int",
+          "line": 36
+        },
+        {
+          "name": "cmd_resume",
+          "kind": "function",
+          "signature": "def cmd_resume(args: argparse.Namespace) -> int",
+          "line": 51
+        },
+        {
+          "name": "cmd_status",
+          "kind": "function",
+          "signature": "def cmd_status(args: argparse.Namespace) -> int",
+          "line": 65
+        },
+        {
+          "name": "cmd_log",
+          "kind": "function",
+          "signature": "def cmd_log(args: argparse.Namespace) -> int",
+          "line": 72
+        },
+        {
+          "name": "cmd_report",
+          "kind": "function",
+          "signature": "def cmd_report(args: argparse.Namespace) -> int",
+          "line": 96
+        },
+        {
+          "name": "cmd_init",
+          "kind": "function",
+          "signature": "def cmd_init(args: argparse.Namespace) -> int",
+          "line": 107
+        },
+        {
+          "name": "cmd_wizard",
+          "kind": "function",
+          "signature": "def cmd_wizard(args: argparse.Namespace) -> int",
+          "line": 117
+        },
+        {
+          "name": "cmd_lint",
+          "kind": "function",
+          "signature": "def cmd_lint(args: argparse.Namespace) -> int",
+          "line": 144
+        },
+        {
+          "name": "cmd_map",
+          "kind": "function",
+          "signature": "def cmd_map(args: argparse.Namespace) -> int",
+          "line": 152
+        },
+        {
+          "name": "cmd_accept",
+          "kind": "function",
+          "signature": "def cmd_accept(args: argparse.Namespace) -> int",
+          "line": 165
+        },
+        {
+          "name": "cmd_ui",
+          "kind": "function",
+          "signature": "def cmd_ui(args: argparse.Namespace) -> int",
+          "line": 175
+        },
+        {
+          "name": "cmd_import",
+          "kind": "function",
+          "signature": "def cmd_import(args: argparse.Namespace) -> int",
+          "line": 181
+        },
+        {
+          "name": "build_parser",
+          "kind": "function",
+          "signature": "def build_parser() -> argparse.ArgumentParser",
+          "line": 213
+        },
+        {
+          "name": "main",
+          "kind": "function",
+          "signature": "def main(argv: list[str] | None=None) -> int",
+          "line": 304
+        }
+      ],
+      "imports": [
+        "forge/agents.py",
+        "forge/config.py",
+        "forge/dryrun.py",
+        "forge/init.py",
+        "forge/journal.py",
+        "forge/lint.py",
+        "forge/llm.py",
+        "forge/map.py",
+        "forge/prompts.py",
+        "forge/report.py",
+        "forge/runner.py",
+        "forge/ui.py",
+        "forge/wizard.py"
+      ]
+    },
+    "forge/config.py": {
+      "entities": [
+        {
+          "name": "RoleConfig",
+          "kind": "class",
+          "signature": "class RoleConfig: cost_usd",
+          "line": 20
+        },
+        {
+          "name": "Budgets",
+          "kind": "class",
+          "signature": "class Budgets",
+          "line": 35
+        },
+        {
+          "name": "RetryConfig",
+          "kind": "class",
+          "signature": "class RetryConfig",
+          "line": 43
+        },
+        {
+          "name": "ForgeConfig",
+          "kind": "class",
+          "signature": "class ForgeConfig: role",
+          "line": 49
+        },
+        {
+          "name": "forge_root",
+          "kind": "function",
+          "signature": "def forge_root() -> Path",
+          "line": 65
+        },
+        {
+          "name": "load_env_file",
+          "kind": "function",
+          "signature": "def load_env_file(root: Path) -> dict[str, str]",
+          "line": 73
+        },
+        {
+          "name": "load_config",
+          "kind": "function",
+          "signature": "def load_config(root: Path | None=None, provider_path: Path | None=None) -> ForgeConfig",
+          "line": 97
+        }
+      ],
+      "imports": []
+    },
+    "forge/detect.py": {
+      "entities": [
+        {
+          "name": "RepoScan",
+          "kind": "class",
+          "signature": "class RepoScan",
+          "line": 27
+        },
+        {
+          "name": "BaselineResult",
+          "kind": "class",
+          "signature": "class BaselineResult",
+          "line": 39
+        },
+        {
+          "name": "scan_repo",
+          "kind": "function",
+          "signature": "def scan_repo(root: Path) -> RepoScan",
+          "line": 106
+        },
+        {
+          "name": "run_baseline",
+          "kind": "function",
+          "signature": "def run_baseline(root: Path, commands: list[str], timeout: int=300) -> list[BaselineResult]",
+          "line": 122
+        },
+        {
+          "name": "render_scan",
+          "kind": "function",
+          "signature": "def render_scan(scan: RepoScan) -> str",
+          "line": 139
+        },
+        {
+          "name": "render_baseline",
+          "kind": "function",
+          "signature": "def render_baseline(results: list[BaselineResult]) -> str",
+          "line": 154
+        }
+      ],
+      "imports": []
+    },
+    "forge/dryrun.py": {
+      "entities": [
+        {
+          "name": "dry_run_report",
+          "kind": "function",
+          "signature": "def dry_run_report(tasks_path: Path, runs_dir: Path, per_run_cap: float) -> str",
+          "line": 38
+        }
+      ],
+      "imports": [
+        "forge/models.py"
+      ]
+    },
+    "forge/init.py": {
+      "entities": [
+        {
+          "name": "init_project",
+          "kind": "function",
+          "signature": "def init_project(target: Path, forge_root: Path, profile_name: str=DEFAULT_PROFILE, force: bool=False, check: bool=True) -> str",
+          "line": 97
+        },
+        {
+          "name": "env_has_api_key",
+          "kind": "function",
+          "signature": "def env_has_api_key(forge_root: Path) -> bool",
+          "line": 132
+        }
+      ],
+      "imports": [
+        "forge/detect.py",
+        "forge/profiles.py"
+      ]
+    },
+    "forge/journal.py": {
+      "entities": [
+        {
+          "name": "utc_now",
+          "kind": "function",
+          "signature": "def utc_now() -> str",
+          "line": 20
+        },
+        {
+          "name": "new_run_id",
+          "kind": "function",
+          "signature": "def new_run_id() -> str",
+          "line": 24
+        },
+        {
+          "name": "Journal",
+          "kind": "class",
+          "signature": "class Journal: write_meta, read_meta, accept_task, accepted_tasks, event, read_events, task_state, set_task_state, log_for_task",
+          "line": 28
+        }
+      ],
+      "imports": [
+        "forge/models.py"
+      ]
+    },
+    "forge/lint.py": {
+      "entities": [
+        {
+          "name": "is_test_command",
+          "kind": "function",
+          "signature": "def is_test_command(command: str) -> bool",
+          "line": 30
+        },
+        {
+          "name": "scope_covers_tests",
+          "kind": "function",
+          "signature": "def scope_covers_tests(task: dict[str, Any]) -> bool",
+          "line": 35
+        },
+        {
+          "name": "acceptance_order_warnings",
+          "kind": "function",
+          "signature": "def acceptance_order_warnings(tasks: list[dict[str, Any]], *, existing_tests: bool | None=None) -> list[str]",
+          "line": 66
+        },
+        {
+          "name": "has_existing_tests",
+          "kind": "function",
+          "signature": "def has_existing_tests(root: Path) -> bool",
+          "line": 98
+        },
+        {
+          "name": "test_scope_warnings",
+          "kind": "function",
+          "signature": "def test_scope_warnings(tasks: list[dict[str, Any]]) -> list[str]",
+          "line": 112
+        },
+        {
+          "name": "lint_tasks",
+          "kind": "function",
+          "signature": "def lint_tasks(path: Path) -> tuple[list[str], list[str]]",
+          "line": 129
+        },
+        {
+          "name": "render_lint",
+          "kind": "function",
+          "signature": "def render_lint(path: Path, errors: list[str], warnings: list[str]) -> str",
+          "line": 161
+        }
+      ],
+      "imports": [
+        "forge/models.py"
+      ]
+    },
+    "forge/llm.py": {
+      "entities": [
+        {
+          "name": "ToolCall",
+          "kind": "class",
+          "signature": "class ToolCall",
+          "line": 21
+        },
+        {
+          "name": "ChatResult",
+          "kind": "class",
+          "signature": "class ChatResult",
+          "line": 28
+        },
+        {
+          "name": "LLMClient",
+          "kind": "class",
+          "signature": "class LLMClient(Protocol): chat",
+          "line": 36
+        },
+        {
+          "name": "ProviderError",
+          "kind": "class",
+          "signature": "class ProviderError(Exception)",
+          "line": 47
+        },
+        {
+          "name": "OpenAIClient",
+          "kind": "class",
+          "signature": "class OpenAIClient: chat",
+          "line": 51
+        },
+        {
+          "name": "MockClient",
+          "kind": "class",
+          "signature": "class MockClient: scenario, chat",
+          "line": 167
+        },
+        {
+          "name": "make_client",
+          "kind": "function",
+          "signature": "def make_client(cfg: ForgeConfig) -> LLMClient",
+          "line": 302
+        }
+      ],
+      "imports": [
+        "forge/config.py"
+      ]
+    },
+    "forge/map.py": {
+      "entities": [
+        {
+          "name": "Entity",
+          "kind": "class",
+          "signature": "class Entity",
+          "line": 40
+        },
+        {
+          "name": "FileMap",
+          "kind": "class",
+          "signature": "class FileMap",
+          "line": 50
+        },
+        {
+          "name": "scan_entities",
+          "kind": "function",
+          "signature": "def scan_entities(root: Path) -> dict[str, FileMap]",
+          "line": 121
+        },
+        {
+          "name": "write_map",
+          "kind": "function",
+          "signature": "def write_map(root: Path, maps: dict[str, FileMap]) -> tuple[Path, Path]",
+          "line": 149
+        },
+        {
+          "name": "render_entities_md",
+          "kind": "function",
+          "signature": "def render_entities_md(maps: dict[str, FileMap]) -> str",
+          "line": 176
+        },
+        {
+          "name": "load_entity_index",
+          "kind": "function",
+          "signature": "def load_entity_index(root: Path) -> dict[str, object] | None",
+          "line": 207
+        },
+        {
+          "name": "neighbors_of",
+          "kind": "function",
+          "signature": "def neighbors_of(scope: set[str], files: dict[str, object]) -> set[str]",
+          "line": 230
+        },
+        {
+          "name": "build_repo_context",
+          "kind": "function",
+          "signature": "def build_repo_context(root: Path, scope_paths: list[str]) -> str",
+          "line": 242
+        }
+      ],
+      "imports": []
+    },
+    "forge/models.py": {
+      "entities": [
+        {
+          "name": "TaskBudget",
+          "kind": "class",
+          "signature": "class TaskBudget",
+          "line": 19
+        },
+        {
+          "name": "Task",
+          "kind": "class",
+          "signature": "class Task",
+          "line": 27
+        },
+        {
+          "name": "TaskPackage",
+          "kind": "class",
+          "signature": "class TaskPackage",
+          "line": 39
+        },
+        {
+          "name": "load_tasks",
+          "kind": "function",
+          "signature": "def load_tasks(path: Path) -> TaskPackage",
+          "line": 47
+        },
+        {
+          "name": "topo_order",
+          "kind": "function",
+          "signature": "def topo_order(tasks: list[Task]) -> list[Task]",
+          "line": 115
+        },
+        {
+          "name": "TaskState",
+          "kind": "class",
+          "signature": "class TaskState",
+          "line": 134
+        }
+      ],
+      "imports": []
+    },
+    "forge/profiles.py": {
+      "entities": [
+        {
+          "name": "Profile",
+          "kind": "class",
+          "signature": "class Profile",
+          "line": 14
+        },
+        {
+          "name": "get_profile",
+          "kind": "function",
+          "signature": "def get_profile(name: str) -> Profile",
+          "line": 62
+        },
+        {
+          "name": "render_profiles",
+          "kind": "function",
+          "signature": "def render_profiles() -> str",
+          "line": 72
+        }
+      ],
+      "imports": []
+    },
+    "forge/prompts.py": {
+      "entities": [
+        {
+          "name": "load_prompt",
+          "kind": "function",
+          "signature": "def load_prompt(prompts_dir: Path, name: str) -> str",
+          "line": 19
+        },
+        {
+          "name": "render",
+          "kind": "function",
+          "signature": "def render(template: str, values: dict[str, str]) -> str",
+          "line": 24
+        },
+        {
+          "name": "prompts_version",
+          "kind": "function",
+          "signature": "def prompts_version(prompts_dir: Path) -> str",
+          "line": 32
+        }
+      ],
+      "imports": []
+    },
+    "forge/report.py": {
+      "entities": [
+        {
+          "name": "TaskReport",
+          "kind": "class",
+          "signature": "class TaskReport",
+          "line": 15
+        },
+        {
+          "name": "RunReport",
+          "kind": "class",
+          "signature": "class RunReport: total_cost, total_tokens",
+          "line": 27
+        },
+        {
+          "name": "latest_run_id",
+          "kind": "function",
+          "signature": "def latest_run_id(runs_dir: Path) -> str | None",
+          "line": 41
+        },
+        {
+          "name": "build_report",
+          "kind": "function",
+          "signature": "def build_report(runs_dir: Path, run_id: str) -> RunReport",
+          "line": 58
+        },
+        {
+          "name": "render_status",
+          "kind": "function",
+          "signature": "def render_status(report: RunReport) -> str",
+          "line": 119
+        },
+        {
+          "name": "render_report",
+          "kind": "function",
+          "signature": "def render_report(report: RunReport, per_run_cap: float | None=None) -> str",
+          "line": 142
+        },
+        {
+          "name": "render_plain",
+          "kind": "function",
+          "signature": "def render_plain(report: RunReport) -> str",
+          "line": 161
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/models.py"
+      ]
+    },
+    "forge/runner.py": {
+      "entities": [
+        {
+          "name": "run_shell",
+          "kind": "function",
+          "signature": "def run_shell(root: Path, command: str, timeout: int=ACCEPTANCE_TIMEOUT) -> tuple[int, str]",
+          "line": 24
+        },
+        {
+          "name": "Runner",
+          "kind": "class",
+          "signature": "class Runner: run, accept",
+          "line": 40
+        }
+      ],
+      "imports": [
+        "forge/agents.py",
+        "forge/config.py",
+        "forge/journal.py",
+        "forge/llm.py",
+        "forge/map.py",
+        "forge/models.py",
+        "forge/prompts.py",
+        "forge/tools.py"
+      ]
+    },
+    "forge/tools.py": {
+      "entities": [
+        {
+          "name": "glob_to_regex",
+          "kind": "function",
+          "signature": "def glob_to_regex(pattern: str) -> re.Pattern[str]",
+          "line": 102
+        },
+        {
+          "name": "path_in_scope",
+          "kind": "function",
+          "signature": "def path_in_scope(rel_path: str, scope_patterns: list[str]) -> bool",
+          "line": 119
+        },
+        {
+          "name": "ScopeViolation",
+          "kind": "class",
+          "signature": "class ScopeViolation(Exception)",
+          "line": 125
+        },
+        {
+          "name": "CommandNotAllowed",
+          "kind": "class",
+          "signature": "class CommandNotAllowed(Exception)",
+          "line": 129
+        },
+        {
+          "name": "ToolBox",
+          "kind": "class",
+          "signature": "class ToolBox: call, check_write_allowed, read_file, write_file, list_dir, run_command",
+          "line": 133
+        }
+      ],
+      "imports": []
+    },
+    "forge/ui.py": {
+      "entities": [
+        {
+          "name": "list_runs",
+          "kind": "function",
+          "signature": "def list_runs(runs_dir: Path) -> list[dict[str, Any]]",
+          "line": 69
+        },
+        {
+          "name": "run_detail",
+          "kind": "function",
+          "signature": "def run_detail(runs_dir: Path, run_id: str) -> dict[str, Any] | None",
+          "line": 112
+        },
+        {
+          "name": "run_events",
+          "kind": "function",
+          "signature": "def run_events(runs_dir: Path, run_id: str, task: str | None, tail: int) -> list[dict[str, Any]] | None",
+          "line": 152
+        },
+        {
+          "name": "make_handler",
+          "kind": "function",
+          "signature": "def make_handler(runs_dir: Path) -> type[BaseHTTPRequestHandler]",
+          "line": 321
+        },
+        {
+          "name": "create_server",
+          "kind": "function",
+          "signature": "def create_server(runs_dir: Path, port: int=8765, host: str='127.0.0.1') -> ThreadingHTTPServer",
+          "line": 407
+        },
+        {
+          "name": "serve",
+          "kind": "function",
+          "signature": "def serve(runs_dir: Path, port: int) -> int",
+          "line": 412
+        }
+      ],
+      "imports": [
+        "forge/lint.py",
+        "forge/models.py"
+      ]
+    },
+    "forge/wizard.py": {
+      "entities": [
+        {
+          "name": "run_wizard",
+          "kind": "function",
+          "signature": "def run_wizard(cfg: ForgeConfig, client: LLMClient, target: Path, intent: str, profile_name: str=DEFAULT_PROFILE, out: Path | None=None, force: bool=False, check: bool=True, ask: Callable[[str], str] | None=input) -> str",
+          "line": 262
+        },
+        {
+          "name": "list_recipes",
+          "kind": "function",
+          "signature": "def list_recipes(recipes_dir: Path) -> list[str]",
+          "line": 373
+        },
+        {
+          "name": "run_recipe",
+          "kind": "function",
+          "signature": "def run_recipe(cfg: ForgeConfig, target: Path, recipe_name: str, profile_name: str=DEFAULT_PROFILE, out: Path | None=None, force: bool=False, ask: Callable[[str], str] | None=input) -> str",
+          "line": 378
+        }
+      ],
+      "imports": [
+        "forge/agents.py",
+        "forge/config.py",
+        "forge/detect.py",
+        "forge/journal.py",
+        "forge/lint.py",
+        "forge/llm.py",
+        "forge/models.py",
+        "forge/profiles.py",
+        "forge/prompts.py"
+      ]
+    },
+    "site/build_pages.py": {
+      "entities": [
+        {
+          "name": "main",
+          "kind": "function",
+          "signature": "def main() -> int",
+          "line": 32
+        }
+      ],
+      "imports": []
+    },
+    "tests/conftest.py": {
+      "entities": [
+        {
+          "name": "cfg",
+          "kind": "function",
+          "signature": "def cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ForgeConfig",
+          "line": 17
+        },
+        {
+          "name": "target",
+          "kind": "function",
+          "signature": "def target(tmp_path: Path) -> Path",
+          "line": 28
+        },
+        {
+          "name": "runner",
+          "kind": "function",
+          "signature": "def runner(cfg: ForgeConfig, target: Path) -> Runner",
+          "line": 36
+        },
+        {
+          "name": "write_tasks",
+          "kind": "function",
+          "signature": "def write_tasks(tmp_path: Path, body: str) -> Path",
+          "line": 40
+        }
+      ],
+      "imports": [
+        "forge/config.py",
+        "forge/llm.py",
+        "forge/runner.py"
+      ]
+    },
+    "tests/test_budget.py": {
+      "entities": [
+        {
+          "name": "test_per_task_cost_cap_blocks",
+          "kind": "function",
+          "signature": "def test_per_task_cost_cap_blocks(tmp_path: Path, runner: Runner, cfg) -> None",
+          "line": 13
+        },
+        {
+          "name": "test_per_run_cost_cap_blocks",
+          "kind": "function",
+          "signature": "def test_per_run_cost_cap_blocks(tmp_path: Path, runner: Runner, cfg) -> None",
+          "line": 24
+        },
+        {
+          "name": "test_per_day_cost_cap_blocks",
+          "kind": "function",
+          "signature": "def test_per_day_cost_cap_blocks(tmp_path: Path, runner: Runner, cfg) -> None",
+          "line": 32
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/runner.py",
+        "tests/conftest.py"
+      ]
+    },
+    "tests/test_cli.py": {
+      "entities": [
+        {
+          "name": "test_planner_mock_draft_is_valid_yaml",
+          "kind": "function",
+          "signature": "def test_planner_mock_draft_is_valid_yaml(cfg) -> None",
+          "line": 9
+        },
+        {
+          "name": "test_cli_parser_commands",
+          "kind": "function",
+          "signature": "def test_cli_parser_commands() -> None",
+          "line": 16
+        }
+      ],
+      "imports": [
+        "forge/cli.py",
+        "forge/llm.py"
+      ]
+    },
+    "tests/test_detect.py": {
+      "entities": [
+        {
+          "name": "test_detect_python_repo",
+          "kind": "function",
+          "signature": "def test_detect_python_repo(tmp_path: Path) -> None",
+          "line": 8
+        },
+        {
+          "name": "test_detect_node_repo",
+          "kind": "function",
+          "signature": "def test_detect_node_repo(tmp_path: Path) -> None",
+          "line": 16
+        },
+        {
+          "name": "test_detect_node_without_test_script",
+          "kind": "function",
+          "signature": "def test_detect_node_without_test_script(tmp_path: Path) -> None",
+          "line": 25
+        },
+        {
+          "name": "test_detect_dotnet_and_git",
+          "kind": "function",
+          "signature": "def test_detect_dotnet_and_git(tmp_path: Path) -> None",
+          "line": 32
+        },
+        {
+          "name": "test_detect_ci_commands",
+          "kind": "function",
+          "signature": "def test_detect_ci_commands(tmp_path: Path) -> None",
+          "line": 41
+        },
+        {
+          "name": "test_detect_empty_repo",
+          "kind": "function",
+          "signature": "def test_detect_empty_repo(tmp_path: Path) -> None",
+          "line": 57
+        },
+        {
+          "name": "test_render_baseline_red_stops",
+          "kind": "function",
+          "signature": "def test_render_baseline_red_stops() -> None",
+          "line": 63
+        },
+        {
+          "name": "test_render_scan_lists_commands",
+          "kind": "function",
+          "signature": "def test_render_scan_lists_commands(tmp_path: Path) -> None",
+          "line": 72
+        }
+      ],
+      "imports": [
+        "forge/detect.py"
+      ]
+    },
+    "tests/test_dryrun.py": {
+      "entities": [
+        {
+          "name": "test_dry_run_caps_without_history",
+          "kind": "function",
+          "signature": "def test_dry_run_caps_without_history(tmp_path: Path) -> None",
+          "line": 25
+        },
+        {
+          "name": "test_dry_run_uses_history_median",
+          "kind": "function",
+          "signature": "def test_dry_run_uses_history_median(tmp_path: Path) -> None",
+          "line": 37
+        }
+      ],
+      "imports": [
+        "forge/dryrun.py"
+      ]
+    },
+    "tests/test_init.py": {
+      "entities": [
+        {
+          "name": "test_init_creates_skeleton_and_git",
+          "kind": "function",
+          "signature": "def test_init_creates_skeleton_and_git(tmp_path: Path) -> None",
+          "line": 10
+        },
+        {
+          "name": "test_init_does_not_overwrite_without_force",
+          "kind": "function",
+          "signature": "def test_init_does_not_overwrite_without_force(tmp_path: Path) -> None",
+          "line": 21
+        },
+        {
+          "name": "test_init_warns_about_missing_env",
+          "kind": "function",
+          "signature": "def test_init_warns_about_missing_env(tmp_path: Path) -> None",
+          "line": 32
+        },
+        {
+          "name": "test_init_baseline_runs_detected_checks",
+          "kind": "function",
+          "signature": "def test_init_baseline_runs_detected_checks(tmp_path: Path) -> None",
+          "line": 39
+        },
+        {
+          "name": "test_init_rejects_missing_dir",
+          "kind": "function",
+          "signature": "def test_init_rejects_missing_dir(tmp_path: Path) -> None",
+          "line": 48
+        }
+      ],
+      "imports": [
+        "forge/init.py"
+      ]
+    },
+    "tests/test_lint.py": {
+      "entities": [
+        {
+          "name": "test_lint_good_queue",
+          "kind": "function",
+          "signature": "def test_lint_good_queue(tmp_path: Path) -> None",
+          "line": 39
+        },
+        {
+          "name": "test_lint_catches_tests_in_scope",
+          "kind": "function",
+          "signature": "def test_lint_catches_tests_in_scope(tmp_path: Path) -> None",
+          "line": 47
+        },
+        {
+          "name": "test_lint_warns_on_missing_acceptance_and_budget",
+          "kind": "function",
+          "signature": "def test_lint_warns_on_missing_acceptance_and_budget(tmp_path: Path) -> None",
+          "line": 55
+        },
+        {
+          "name": "test_lint_reports_contract_error",
+          "kind": "function",
+          "signature": "def test_lint_reports_contract_error(tmp_path: Path) -> None",
+          "line": 64
+        },
+        {
+          "name": "test_lint_warns_on_test_acceptance_before_tests_exist",
+          "kind": "function",
+          "signature": "def test_lint_warns_on_test_acceptance_before_tests_exist(tmp_path: Path) -> None",
+          "line": 110
+        },
+        {
+          "name": "test_lint_no_order_warning_when_tests_task_first",
+          "kind": "function",
+          "signature": "def test_lint_no_order_warning_when_tests_task_first(tmp_path: Path) -> None",
+          "line": 122
+        },
+        {
+          "name": "test_has_existing_tests",
+          "kind": "function",
+          "signature": "def test_has_existing_tests(tmp_path: Path) -> None",
+          "line": 130
+        }
+      ],
+      "imports": [
+        "forge/lint.py"
+      ]
+    },
+    "tests/test_map.py": {
+      "entities": [
+        {
+          "name": "test_scan_entities_extracts_public_surface",
+          "kind": "function",
+          "signature": "def test_scan_entities_extracts_public_surface(tmp_path: Path) -> None",
+          "line": 46
+        },
+        {
+          "name": "test_scan_resolves_local_imports",
+          "kind": "function",
+          "signature": "def test_scan_resolves_local_imports(tmp_path: Path) -> None",
+          "line": 61
+        },
+        {
+          "name": "test_write_map_creates_canon_and_docs",
+          "kind": "function",
+          "signature": "def test_write_map_creates_canon_and_docs(tmp_path: Path) -> None",
+          "line": 69
+        },
+        {
+          "name": "test_neighbors_graph_both_directions",
+          "kind": "function",
+          "signature": "def test_neighbors_graph_both_directions(tmp_path: Path) -> None",
+          "line": 80
+        },
+        {
+          "name": "test_repo_context_empty_without_artifacts",
+          "kind": "function",
+          "signature": "def test_repo_context_empty_without_artifacts(tmp_path: Path) -> None",
+          "line": 90
+        },
+        {
+          "name": "test_repo_context_catalog_and_neighbors",
+          "kind": "function",
+          "signature": "def test_repo_context_catalog_and_neighbors(tmp_path: Path) -> None",
+          "line": 95
+        },
+        {
+          "name": "test_repo_context_agents_md",
+          "kind": "function",
+          "signature": "def test_repo_context_agents_md(tmp_path: Path) -> None",
+          "line": 109
+        }
+      ],
+      "imports": [
+        "forge/map.py"
+      ]
+    },
+    "tests/test_mock_run.py": {
+      "entities": [
+        {
+          "name": "test_mock_run_done",
+          "kind": "function",
+          "signature": "def test_mock_run_done(runner: Runner, cfg, target: Path, tmp_path: Path) -> None",
+          "line": 12
+        },
+        {
+          "name": "test_scope_violation_logged",
+          "kind": "function",
+          "signature": "def test_scope_violation_logged(runner: Runner, cfg, tmp_path: Path, monkeypatch) -> None",
+          "line": 36
+        },
+        {
+          "name": "test_gate_blocks_until_accept",
+          "kind": "function",
+          "signature": "def test_gate_blocks_until_accept(runner: Runner, cfg, tmp_path: Path) -> None",
+          "line": 49
+        },
+        {
+          "name": "test_accept_overrides_blocked",
+          "kind": "function",
+          "signature": "def test_accept_overrides_blocked(runner: Runner, cfg, tmp_path: Path) -> None",
+          "line": 80
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/report.py",
+        "forge/runner.py",
+        "tests/conftest.py"
+      ]
+    },
+    "tests/test_recipes.py": {
+      "entities": [
+        {
+          "name": "test_recipes_gallery_present",
+          "kind": "function",
+          "signature": "def test_recipes_gallery_present(cfg) -> None",
+          "line": 11
+        },
+        {
+          "name": "test_recipe_test_coverage_defaults",
+          "kind": "function",
+          "signature": "def test_recipe_test_coverage_defaults(cfg, target: Path) -> None",
+          "line": 16
+        },
+        {
+          "name": "test_recipe_feature_two_tasks_with_answers",
+          "kind": "function",
+          "signature": "def test_recipe_feature_two_tasks_with_answers(cfg, target: Path) -> None",
+          "line": 26
+        },
+        {
+          "name": "test_recipe_unknown_name_lists_available",
+          "kind": "function",
+          "signature": "def test_recipe_unknown_name_lists_available(cfg, target: Path) -> None",
+          "line": 38
+        },
+        {
+          "name": "test_recipe_refuses_overwrite",
+          "kind": "function",
+          "signature": "def test_recipe_refuses_overwrite(cfg, target: Path) -> None",
+          "line": 43
+        },
+        {
+          "name": "test_all_recipes_render_valid_dags",
+          "kind": "function",
+          "signature": "def test_all_recipes_render_valid_dags(cfg, target: Path, tmp_path: Path) -> None",
+          "line": 49
+        }
+      ],
+      "imports": [
+        "forge/models.py",
+        "forge/wizard.py"
+      ]
+    },
+    "tests/test_repair.py": {
+      "entities": [
+        {
+          "name": "test_repair_heals_within_limit",
+          "kind": "function",
+          "signature": "def test_repair_heals_within_limit(runner: Runner, cfg, tmp_path: Path) -> None",
+          "line": 29
+        },
+        {
+          "name": "test_repair_exhausted_fails_with_journal",
+          "kind": "function",
+          "signature": "def test_repair_exhausted_fails_with_journal(runner: Runner, cfg, tmp_path: Path) -> None",
+          "line": 40
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/runner.py",
+        "tests/conftest.py"
+      ]
+    },
+    "tests/test_report_gate.py": {
+      "entities": [
+        {
+          "name": "test_report_counts_queued_from_tasks_path",
+          "kind": "function",
+          "signature": "def test_report_counts_queued_from_tasks_path(cfg, tmp_path: Path) -> None",
+          "line": 53
+        },
+        {
+          "name": "test_report_without_tasks_path_keeps_old_behavior",
+          "kind": "function",
+          "signature": "def test_report_without_tasks_path_keeps_old_behavior(cfg) -> None",
+          "line": 63
+        },
+        {
+          "name": "test_status_shows_gate_wait_hint",
+          "kind": "function",
+          "signature": "def test_status_shows_gate_wait_hint(cfg, tmp_path: Path) -> None",
+          "line": 73
+        },
+        {
+          "name": "test_status_no_hint_after_accept",
+          "kind": "function",
+          "signature": "def test_status_no_hint_after_accept(cfg, tmp_path: Path) -> None",
+          "line": 81
+        },
+        {
+          "name": "test_runner_blocks_dependent_of_failed_dependency",
+          "kind": "function",
+          "signature": "def test_runner_blocks_dependent_of_failed_dependency(cfg) -> None",
+          "line": 88
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/models.py",
+        "forge/report.py",
+        "forge/runner.py",
+        "tests/conftest.py"
+      ]
+    },
+    "tests/test_report_plain.py": {
+      "entities": [
+        {
+          "name": "test_plain_all_done",
+          "kind": "function",
+          "signature": "def test_plain_all_done(cfg) -> None",
+          "line": 20
+        },
+        {
+          "name": "test_plain_failed_and_blocked",
+          "kind": "function",
+          "signature": "def test_plain_failed_and_blocked(cfg) -> None",
+          "line": 28
+        },
+        {
+          "name": "test_plain_empty_run",
+          "kind": "function",
+          "signature": "def test_plain_empty_run(cfg) -> None",
+          "line": 44
+        },
+        {
+          "name": "test_history_snapshots_are_not_task_states",
+          "kind": "function",
+          "signature": "def test_history_snapshots_are_not_task_states(cfg) -> None",
+          "line": 50
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/models.py",
+        "forge/report.py",
+        "forge/ui.py"
+      ]
+    },
+    "tests/test_resume_history.py": {
+      "entities": [
+        {
+          "name": "StubClient",
+          "kind": "class",
+          "signature": "class StubClient: chat",
+          "line": 13
+        },
+        {
+          "name": "test_history_saved_and_resumed",
+          "kind": "function",
+          "signature": "def test_history_saved_and_resumed(cfg, target: Path, tmp_path: Path) -> None",
+          "line": 29
+        },
+        {
+          "name": "test_history_dropped_on_steps_exhausted",
+          "kind": "function",
+          "signature": "def test_history_dropped_on_steps_exhausted(cfg, target: Path, tmp_path: Path) -> None",
+          "line": 63
+        }
+      ],
+      "imports": [
+        "forge/agents.py",
+        "forge/journal.py",
+        "forge/llm.py",
+        "forge/tools.py"
+      ]
+    },
+    "tests/test_scope.py": {
+      "entities": [
+        {
+          "name": "test_glob_patterns",
+          "kind": "function",
+          "signature": "def test_glob_patterns() -> None",
+          "line": 11
+        },
+        {
+          "name": "test_glob_double_star_matches_nested",
+          "kind": "function",
+          "signature": "def test_glob_double_star_matches_nested() -> None",
+          "line": 20
+        },
+        {
+          "name": "test_write_outside_scope_blocked",
+          "kind": "function",
+          "signature": "def test_write_outside_scope_blocked(tmp_path: Path) -> None",
+          "line": 25
+        },
+        {
+          "name": "test_write_into_canon_always_blocked",
+          "kind": "function",
+          "signature": "def test_write_into_canon_always_blocked(tmp_path: Path) -> None",
+          "line": 33
+        },
+        {
+          "name": "test_path_traversal_blocked",
+          "kind": "function",
+          "signature": "def test_path_traversal_blocked(tmp_path: Path) -> None",
+          "line": 40
+        },
+        {
+          "name": "test_write_inside_scope_ok",
+          "kind": "function",
+          "signature": "def test_write_inside_scope_ok(tmp_path: Path) -> None",
+          "line": 46
+        },
+        {
+          "name": "test_run_command_whitelist",
+          "kind": "function",
+          "signature": "def test_run_command_whitelist(tmp_path: Path) -> None",
+          "line": 53
+        }
+      ],
+      "imports": [
+        "forge/config.py",
+        "forge/tools.py"
+      ]
+    },
+    "tests/test_tasks_model.py": {
+      "entities": [
+        {
+          "name": "test_example_tasks_parse",
+          "kind": "function",
+          "signature": "def test_example_tasks_parse() -> None",
+          "line": 11
+        },
+        {
+          "name": "test_topo_order_respects_dependencies",
+          "kind": "function",
+          "signature": "def test_topo_order_respects_dependencies(tmp_path: Path) -> None",
+          "line": 22
+        },
+        {
+          "name": "test_cycle_rejected",
+          "kind": "function",
+          "signature": "def test_cycle_rejected(tmp_path: Path) -> None",
+          "line": 32
+        },
+        {
+          "name": "test_duplicate_id_rejected",
+          "kind": "function",
+          "signature": "def test_duplicate_id_rejected(tmp_path: Path) -> None",
+          "line": 42
+        },
+        {
+          "name": "test_unknown_dependency_rejected",
+          "kind": "function",
+          "signature": "def test_unknown_dependency_rejected(tmp_path: Path) -> None",
+          "line": 52
+        }
+      ],
+      "imports": [
+        "forge/models.py",
+        "tests/conftest.py"
+      ]
+    },
+    "tests/test_tools_policy.py": {
+      "entities": [
+        {
+          "name": "make_toolbox",
+          "kind": "function",
+          "signature": "def make_toolbox(target: Path) -> ToolBox",
+          "line": 8
+        },
+        {
+          "name": "test_dotnet_allowed",
+          "kind": "function",
+          "signature": "def test_dotnet_allowed(target: Path) -> None",
+          "line": 12
+        },
+        {
+          "name": "test_dependency_install_blocked",
+          "kind": "function",
+          "signature": "def test_dependency_install_blocked(target: Path) -> None",
+          "line": 19
+        },
+        {
+          "name": "test_innocent_commands_not_blocked",
+          "kind": "function",
+          "signature": "def test_innocent_commands_not_blocked(target: Path) -> None",
+          "line": 38
+        }
+      ],
+      "imports": [
+        "forge/tools.py"
+      ]
+    },
+    "tests/test_ui.py": {
+      "entities": [
+        {
+          "name": "runs_dir",
+          "kind": "function",
+          "signature": "def runs_dir(tmp_path: Path) -> Path",
+          "line": 67
+        },
+        {
+          "name": "ui_server",
+          "kind": "function",
+          "signature": "def ui_server(runs_dir: Path) -> Iterator[str]",
+          "line": 74
+        },
+        {
+          "name": "synthetic_run",
+          "kind": "function",
+          "signature": "def synthetic_run(runs_dir: Path, tmp_path: Path) -> str",
+          "line": 88
+        },
+        {
+          "name": "test_runs_empty",
+          "kind": "function",
+          "signature": "def test_runs_empty(runs_dir: Path, ui_server: str) -> None",
+          "line": 126
+        },
+        {
+          "name": "test_index_served",
+          "kind": "function",
+          "signature": "def test_index_served(ui_server: str) -> None",
+          "line": 132
+        },
+        {
+          "name": "test_runs_summary",
+          "kind": "function",
+          "signature": "def test_runs_summary(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 139
+        },
+        {
+          "name": "test_run_detail_titles_and_totals",
+          "kind": "function",
+          "signature": "def test_run_detail_titles_and_totals(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 155
+        },
+        {
+          "name": "test_run_detail_without_tasks_yaml",
+          "kind": "function",
+          "signature": "def test_run_detail_without_tasks_yaml(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 174
+        },
+        {
+          "name": "test_events_tail_and_task_filter",
+          "kind": "function",
+          "signature": "def test_events_tail_and_task_filter(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 187
+        },
+        {
+          "name": "test_events_note_truncated",
+          "kind": "function",
+          "signature": "def test_events_note_truncated(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 197
+        },
+        {
+          "name": "test_unknown_run_404",
+          "kind": "function",
+          "signature": "def test_unknown_run_404(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 205
+        },
+        {
+          "name": "test_run_id_traversal_404",
+          "kind": "function",
+          "signature": "def test_run_id_traversal_404(runs_dir: Path, ui_server: str, synthetic_run: str) -> None",
+          "line": 213
+        }
+      ],
+      "imports": [
+        "forge/journal.py",
+        "forge/models.py",
+        "forge/ui.py"
+      ]
+    },
+    "tests/test_ui_wizard.py": {
+      "entities": [
+        {
+          "name": "draft_file",
+          "kind": "function",
+          "signature": "def draft_file(tmp_path: Path) -> Path",
+          "line": 40
+        },
+        {
+          "name": "ui_server",
+          "kind": "function",
+          "signature": "def ui_server(tmp_path: Path) -> Iterator[str]",
+          "line": 47
+        },
+        {
+          "name": "test_wizard_form_renders_cards",
+          "kind": "function",
+          "signature": "def test_wizard_form_renders_cards(ui_server: str, draft_file: Path) -> None",
+          "line": 80
+        },
+        {
+          "name": "test_wizard_form_requires_yaml",
+          "kind": "function",
+          "signature": "def test_wizard_form_requires_yaml(ui_server: str, tmp_path: Path) -> None",
+          "line": 88
+        },
+        {
+          "name": "test_wizard_save_roundtrip",
+          "kind": "function",
+          "signature": "def test_wizard_save_roundtrip(ui_server: str, draft_file: Path) -> None",
+          "line": 97
+        },
+        {
+          "name": "test_wizard_save_rejects_invalid_without_touching_file",
+          "kind": "function",
+          "signature": "def test_wizard_save_rejects_invalid_without_touching_file(ui_server: str, draft_file: Path) -> None",
+          "line": 119
+        },
+        {
+          "name": "test_wizard_save_bad_cost",
+          "kind": "function",
+          "signature": "def test_wizard_save_bad_cost(ui_server: str, draft_file: Path) -> None",
+          "line": 136
+        },
+        {
+          "name": "test_wizard_api_still_json_404",
+          "kind": "function",
+          "signature": "def test_wizard_api_still_json_404(ui_server: str) -> None",
+          "line": 147
+        }
+      ],
+      "imports": [
+        "forge/models.py",
+        "forge/ui.py"
+      ]
+    },
+    "tests/test_wizard.py": {
+      "entities": [
+        {
+          "name": "test_wizard_writes_valid_draft",
+          "kind": "function",
+          "signature": "def test_wizard_writes_valid_draft(cfg, target: Path) -> None",
+          "line": 15
+        },
+        {
+          "name": "test_wizard_refuses_overwrite_without_force",
+          "kind": "function",
+          "signature": "def test_wizard_refuses_overwrite_without_force(cfg, target: Path) -> None",
+          "line": 28
+        },
+        {
+          "name": "test_wizard_normal_profile_no_gate_per_task",
+          "kind": "function",
+          "signature": "def test_wizard_normal_profile_no_gate_per_task(cfg, target: Path) -> None",
+          "line": 35
+        },
+        {
+          "name": "test_wizard_logs_planner_call",
+          "kind": "function",
+          "signature": "def test_wizard_logs_planner_call(cfg, target: Path) -> None",
+          "line": 41
+        },
+        {
+          "name": "test_normalize_fills_acceptance_from_scan",
+          "kind": "function",
+          "signature": "def test_normalize_fills_acceptance_from_scan() -> None",
+          "line": 50
+        },
+        {
+          "name": "test_normalize_strips_test_acceptance_before_tests_exist",
+          "kind": "function",
+          "signature": "def test_normalize_strips_test_acceptance_before_tests_exist() -> None",
+          "line": 58
+        },
+        {
+          "name": "test_normalize_keeps_test_acceptance_when_repo_has_tests",
+          "kind": "function",
+          "signature": "def test_normalize_keeps_test_acceptance_when_repo_has_tests() -> None",
+          "line": 76
+        },
+        {
+          "name": "test_normalize_warns_on_empty_acceptance_without_scan",
+          "kind": "function",
+          "signature": "def test_normalize_warns_on_empty_acceptance_without_scan() -> None",
+          "line": 84
+        },
+        {
+          "name": "test_test_scope_warnings",
+          "kind": "function",
+          "signature": "def test_test_scope_warnings() -> None",
+          "line": 91
+        },
+        {
+          "name": "test_wizard_survives_non_yaml_planner_reply",
+          "kind": "function",
+          "signature": "def test_wizard_survives_non_yaml_planner_reply(cfg, target: Path, monkeypatch) -> None",
+          "line": 98
+        },
+        {
+          "name": "test_wizard_draft_parses_with_yaml_directly",
+          "kind": "function",
+          "signature": "def test_wizard_draft_parses_with_yaml_directly(cfg, target: Path) -> None",
+          "line": 115
+        },
+        {
+          "name": "test_wizard_interview_asks_and_continues",
+          "kind": "function",
+          "signature": "def test_wizard_interview_asks_and_continues(cfg, target: Path, monkeypatch) -> None",
+          "line": 124
+        },
+        {
+          "name": "test_wizard_interview_noninteractive_warns",
+          "kind": "function",
+          "signature": "def test_wizard_interview_noninteractive_warns(cfg, target: Path, monkeypatch) -> None",
+          "line": 135
+        },
+        {
+          "name": "test_strip_fences",
+          "kind": "function",
+          "signature": "def test_strip_fences() -> None",
+          "line": 146
+        },
+        {
+          "name": "test_wizard_repairs_fenced_yaml",
+          "kind": "function",
+          "signature": "def test_wizard_repairs_fenced_yaml(cfg, target: Path) -> None",
+          "line": 154
+        },
+        {
+          "name": "test_wizard_repairs_broken_yaml_via_retry",
+          "kind": "function",
+          "signature": "def test_wizard_repairs_broken_yaml_via_retry(cfg, target: Path) -> None",
+          "line": 171
+        },
+        {
+          "name": "test_wizard_accepts_bare_task_list",
+          "kind": "function",
+          "signature": "def test_wizard_accepts_bare_task_list(cfg, target: Path) -> None",
+          "line": 191
+        },
+        {
+          "name": "test_normalize_dir_scope_gets_glob",
+          "kind": "function",
+          "signature": "def test_normalize_dir_scope_gets_glob() -> None",
+          "line": 211
+        }
+      ],
+      "imports": [
+        "forge/lint.py",
+        "forge/llm.py",
+        "forge/models.py",
+        "forge/profiles.py",
+        "forge/wizard.py"
+      ]
+    }
+  }
+}

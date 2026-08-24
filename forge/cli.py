@@ -13,6 +13,7 @@ from .init import init_project
 from .journal import Journal, new_run_id
 from .lint import lint_tasks, render_lint
 from .llm import make_client
+from .map import scan_entities, write_map
 from .prompts import load_prompt
 from .report import build_report, latest_run_id, render_plain, render_report, render_status
 from .runner import Runner
@@ -148,6 +149,19 @@ def cmd_lint(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
+def cmd_map(args: argparse.Namespace) -> int:
+    """Карта сущностей проекта: AST-скан → canon/entities.json + docs/ENTITIES.md."""
+    target = Path(args.target).resolve() if args.target else Path.cwd()
+    maps = scan_entities(target)
+    canon, docs = write_map(target, maps)
+    total = sum(len(fm.entities) for fm in maps.values())
+    print(f"Карта сущностей: {len(maps)} файлов, {total} публичных сущностей")
+    print(f"  машиночитаемая (агенты, read-only): {canon}")
+    print(f"  человекочитаемая (onboarding):      {docs}")
+    print("Перегенерируйте после каждого принятого прогона: forge map --target .")
+    return 0
+
+
 def cmd_accept(args: argparse.Namespace) -> int:
     cfg = load_config()
     run_id = _resolve_run_id(cfg, args.run_id)
@@ -260,6 +274,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_lint = sub.add_parser("lint", help="проверить очередь до запуска (контракт, заморозка acceptance)")
     p_lint.add_argument("tasks", help="путь к tasks.yaml")
     p_lint.set_defaults(func=cmd_lint)
+
+    p_map = sub.add_parser(
+        "map", help="карта сущностей проекта (AST → canon/entities.json + docs/ENTITIES.md)"
+    )
+    p_map.add_argument("--target", help="корень целевого проекта (по умолчанию — текущий каталог)")
+    p_map.set_defaults(func=cmd_map)
 
     p_accept = sub.add_parser("accept", help="человеческий гейт №3: принять задачу (merge ветки)")
     p_accept.add_argument("task_id")

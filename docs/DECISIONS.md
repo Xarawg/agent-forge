@@ -89,3 +89,7 @@ Pilot coder installed node_modules (tsx/esbuild) and wrote tsx test bridge despi
 ## AF-18. DAG stop rule: dependents of non-done tasks never start
 
 **Decision (owner, 2026-08-22):** found by dogfooding — a task whose `depends_on` dependency ended `blocked`/`failed` used to start anyway. Now the run stops before such a task and waits for the owner to resolve the dependency (`forge accept` or spec edit, then `forge resume`). Same dogfooding run: `forge status` prints an explicit gate hint (`⏸ … forge accept <id> && forge resume <run_id>`), and `forge report` counts "done N of M" against the full tasks.yaml queue (untouched tasks included as `queued`).
+
+## AF-19. Context strategy: deterministic entity map over embeddings (variant B)
+
+**Decision (owner, 2026-08-24):** coder context is assembled structurally, not via RAG/embeddings: `forge map` (AST scan, $0) produces `canon/entities.json` + `docs/ENTITIES.md`; the task prompt carries (1) target repo AGENTS.md excerpt, (2) anti-duplication catalog of all public entity names, (3) signatures of import-graph neighbors of the task scope (depth 1). Rationale: embedding retrieval is non-deterministic and breaks run reproducibility; semantic similarity ≠ contract relatedness; structural maps are the 2026 best practice (Aider repo-map, Claude Code import-following). Manual `canon_snapshot` stays as an optional layer on top. TS/Go support deferred until tree-sitter is added.
