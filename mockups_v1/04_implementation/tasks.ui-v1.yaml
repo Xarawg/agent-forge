@@ -1,0 +1,184 @@
+# Черновик очереди: реализация продакшн-UI v1 по mockups_v1/02_ux/ux-spec.md
+# Гейт №1: проверить человеком (forge lint / /wizard), затем:
+#   forge run --tasks mockups_v1/04_implementation/tasks.ui-v1.yaml --target .
+# Источник истины UX: mockups_v1/02_ux/ux-spec.md; эталон вёрстки:
+# mockups_v1/03_ui/ui-board.html. Продакшн-цели: forge/ui.py,
+# forge/ui_static/index.html, tests/test_ui.py, tests/test_ui_wizard.py.
+
+package: ui-v1-redesign
+
+tasks:
+  # ---- Волна 1: API -------------------------------------------------------
+  - id: api-queue-gatewait
+    title: "API: queue + accepted + gate_wait в GET /api/run/<id>"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §3 (Q-01, Q-02)"
+    scope_paths:
+      - "forge/ui.py"
+    depends_on: []
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+    budget:
+      max_tokens: 120000
+      max_cost_usd: 0.50
+
+  - id: api-report-extra
+    title: "API: report_extra (капы/вердикт/модели/промпты) + note 2000 в events"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §3 (Q-05, Q-07)"
+    scope_paths:
+      - "forge/ui.py"
+    depends_on:
+      - api-queue-gatewait
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+    budget:
+      max_tokens: 100000
+      max_cost_usd: 0.40
+
+  - id: api-accept-resume
+    title: "API: POST /accept + /resume через механизмы runner'а (Q-10)"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §3 POST-ручки (Q-10)"
+    scope_paths:
+      - "forge/ui.py"
+    depends_on:
+      - api-queue-gatewait
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "FORGE_MOCK=1 python -m pytest tests/test_report_gate.py tests/test_resume_history.py -q"
+    budget:
+      max_tokens: 180000
+      max_cost_usd: 0.80
+    gate: api
+
+  # ---- Волна 2: ядро UI ---------------------------------------------------
+  - id: ui-skeleton-i18n
+    title: "UI: каркас index.html — токены site/, шапка, i18n RU/EN, живость"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §2, §4.1, §9 (Q-03, Q-04, Q-09)"
+    scope_paths:
+      - "forge/ui_static/index.html"
+    depends_on:
+      - api-queue-gatewait
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "! grep -Eq 'https?://|@import' forge/ui_static/index.html"
+    budget:
+      max_tokens: 150000
+      max_cost_usd: 0.60
+
+  - id: ui-kanban
+    title: "UI: канбан — призрачные queued, бейджи, прогресс N из M, бар стоимости"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §4.1, §4.4 (Q-01, Q-02)"
+    scope_paths:
+      - "forge/ui_static/index.html"
+    depends_on:
+      - ui-skeleton-i18n
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "! grep -Eq 'https?://|@import' forge/ui_static/index.html"
+    budget:
+      max_tokens: 160000
+      max_cost_usd: 0.70
+
+  - id: ui-gate-modal
+    title: "UI: баннер gate-wait + «Выполнить…» + модальное последствий (Q-10)"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §4.2, §4.3 (Q-10)"
+    scope_paths:
+      - "forge/ui_static/index.html"
+    depends_on:
+      - ui-kanban
+      - api-accept-resume
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "! grep -Eq 'https?://|@import' forge/ui_static/index.html"
+    budget:
+      max_tokens: 160000
+      max_cost_usd: 0.70
+    gate: ui-actions
+
+  - id: ui-report-tab
+    title: "UI: вкладка Отчёт — сводка, полная таблица, блок «простым языком»"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §5 (Q-05)"
+    scope_paths:
+      - "forge/ui_static/index.html"
+    depends_on:
+      - ui-kanban
+      - api-report-extra
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "! grep -Eq 'https?://|@import' forge/ui_static/index.html"
+    budget:
+      max_tokens: 140000
+      max_cost_usd: 0.60
+
+  - id: ui-drawer
+    title: "UI: drawer событий — блоки, переносы, сворачивание note, overlay"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §6 (Q-07)"
+    scope_paths:
+      - "forge/ui_static/index.html"
+    depends_on:
+      - ui-kanban
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "! grep -Eq 'https?://|@import' forge/ui_static/index.html"
+    budget:
+      max_tokens: 120000
+      max_cost_usd: 0.50
+
+  - id: ui-wizard-restyle
+    title: "UI: рестайл wizard-формы в токенах site/ + RU/EN (Q-08)"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §7 (Q-08)"
+    scope_paths:
+      - "forge/ui.py"
+    depends_on:
+      - ui-skeleton-i18n
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui_wizard.py -q"
+    budget:
+      max_tokens: 120000
+      max_cost_usd: 0.50
+
+  # ---- Волна 3: адаптив и доки --------------------------------------------
+  - id: ui-mobile-accordion
+    title: "UI: мобильный <768px — аккордеон пайплайна (вариант B, Q-11)"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §8 (Q-11: выбран B)"
+    scope_paths:
+      - "forge/ui_static/index.html"
+    depends_on:
+      - ui-gate-modal
+      - ui-report-tab
+      - ui-drawer
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/test_ui.py -q"
+      - "! grep -Eq 'https?://|@import' forge/ui_static/index.html"
+    budget:
+      max_tokens: 120000
+      max_cost_usd: 0.50
+
+  - id: tests-ui-v1
+    title: "Тесты: регрессионные кейсы на новые поля API и POST accept/resume"
+    spec_ref: "mockups_v1/02_ux/ux-spec.md §3 (контракт v1)"
+    scope_paths:
+      - "tests/test_ui.py"
+      - "tests/test_ui_wizard.py"
+    depends_on:
+      - ui-mobile-accordion
+      - ui-wizard-restyle
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/ -q"
+    budget:
+      max_tokens: 120000
+      max_cost_usd: 0.50
+
+  - id: docs-spec-sync
+    title: "Доки: синхронизация UI_SPEC.ru.md + UI_SPEC.md с реализацией"
+    spec_ref: "mockups_v1/01_spec_audit/PROPOSED_DECISIONS.md (правки спеки Q-01…Q-11)"
+    scope_paths:
+      - "docs/UI_SPEC.ru.md"
+      - "docs/UI_SPEC.md"
+    depends_on:
+      - tests-ui-v1
+    acceptance:
+      - "FORGE_MOCK=1 python -m pytest tests/ -q"
+    budget:
+      max_tokens: 80000
+      max_cost_usd: 0.30
+    gate: docs
