@@ -1,0 +1,7 @@
+run: run-20260821-153821  provider: provod  mock: False
+TASK                                     STATE          TOKENS     COST REPAIR  NOTE
+extract-cli-module                       blocked        122952 $ 0.0591      1  DISPUTE: о scope `tests/test_storage.py`,
+`tests/test_core.p
+extract-core-module                      failed          99574 $ 0.0472      1  reviewer REJECT: REJECT: Отсутствует diff — файлы не записан
+extract-storage-module                   done            67432 $ 0.0323      1  принято вручную владельцем (override; было: DISPUTE:  своего
+pytest-tests-for-modules                 done            43908 $ 0.0216      0  acceptance зелёный, reviewer APPROVE
