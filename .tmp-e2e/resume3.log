@@ -1,7 +1,0 @@
-run: run-20260821-153821  provider: provod  mock: False
-TASK                                     STATE          TOKENS     COST REPAIR  NOTE
-docs-analytics-final-run                 failed         211891 $ 0.0973      3  не починено за 3 repair-итераций; см. events.jsonl
-extract-cli-module                       done           122952 $ 0.0591      1  принято вручную владельцем (override; было: DISPUTE: о scope
-extract-core-module                      done            99574 $ 0.0472      1  принято вручную владельцем (override; было: reviewer REJECT:
-extract-storage-module                   done            67432 $ 0.0323      1  принято вручную владельцем (override; было: DISPUTE:  своего
-pytest-tests-for-modules                 done            43908 $ 0.0216      0  acceptance зелёный, reviewer APPROVE
