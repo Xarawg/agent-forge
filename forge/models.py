@@ -142,3 +142,4 @@ class TaskState:
     tokens_out: int = 0
     cost_usd: float = 0.0
     updated_at: str = ""
+    skill_state: dict[str, Any] = field(default_factory=dict)   # SKILL.state (P, Σt, …)

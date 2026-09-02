@@ -105,6 +105,9 @@ class Journal:
         path = self.run_dir / "tasks" / f"{task_id}.json"
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
+            # обратная совместимость: если skill_state отсутствует, инициализируем пустым словарём
+            if "skill_state" not in data:
+                data["skill_state"] = {}
             return TaskState(**data)
         return TaskState(id=task_id)
 

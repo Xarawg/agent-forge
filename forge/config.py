@@ -1,4 +1,4 @@
-"""Конфигурация agent-forge: models.yaml + пресет провайдера + .env (SPEC.md §FR-5/FR-6)."""
+"""Конфигурация agent-forge: models.yaml + пресет провайдера + .env (SPEC.md §FR-5/§FR-6)."""
 
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ class Budgets:
     per_run_max_cost_usd: float = 0.50
     per_day_max_cost_usd: float = 5.00
     repair_max_iterations: int = 3
+    max_state_size_chars: int = 4096   # ограничение размера состояния в промпте (SKILL.state)
 
 
 @dataclass
@@ -151,6 +152,7 @@ def load_config(root: Path | None = None, provider_path: Path | None = None) -> 
             per_run_max_cost_usd=float(raw_budgets.get("per_run_max_cost_usd", 0.50)),
             per_day_max_cost_usd=float(raw_budgets.get("per_day_max_cost_usd", 5.00)),
             repair_max_iterations=int(raw_budgets.get("repair_max_iterations", 3)),
+            max_state_size_chars=int(raw_budgets.get("max_state_size_chars", 4096)),
         ),
         retry=RetryConfig(
             max_attempts=int(raw_retry.get("max_attempts", 5)),

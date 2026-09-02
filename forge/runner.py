@@ -1,4 +1,4 @@
-"""Оркестратор прогона: DAG задач, фазы, гейты, бюджеты, git (SPEC.md §FR-2..FR-7)."""
+"""Оркестратор прогона: DAG задач, фазы, гейты, бюджеты, git (SPEC.md §FR-2..§FR-7)."""
 
 from __future__ import annotations
 
@@ -103,38 +103,49 @@ class Runner:
     def _run_task(
         self, journal: Journal, package: TaskPackage, task: Task, spec_path: Path | None
     ) -> None:
-        state = journal.task_state(task.id)
+        state_obj = journal.task_state(task.id)
 
-        if not self._check_budgets(journal, task, state):
+        if not self._check_budgets(journal, task, state_obj):
             return
 
         branch = self._git_branch(task)
         note = f"branch: {branch}" if branch else "branch: (не git-репозиторий, пропуск)"
         journal.event(task_id=task.id, phase="git", note=note)
 
-        state.state = "running"
-        journal.set_task_state(state)
+        # Загружаем начальное SKILL-состояние (из предыдущих запусков, если есть)
+        initial_skill_state = state_obj.skill_state
+
+        # Собираем шаблон промпта (с плейсхолдерами {{state}} и {{observation}})
+        prompt_template = self._task_prompt(package, task, spec_path)
+
+        state_obj.state = "running"
+        journal.set_task_state(state_obj)
+
         toolbox = ToolBox(self.target, task.scope_paths, self.cfg.command_allowlist)
-        user_prompt = self._task_prompt(package, task, spec_path, history="(первая итерация)")
+
+        # Цикл coder'а (SKILL.state)
         outcome = run_tool_agent(
             self.client, self.cfg, journal,
             role="coder",
             system_prompt=self.system_prompt + "\n\n" + load_prompt(self.cfg.prompts_dir, "coder"),
-            user_prompt=user_prompt,
+            user_prompt_template=prompt_template,
             toolbox=toolbox,
             task_id=task.id,
             phase="coder",
-            history_path=self._history_path(journal, task, "coder"),
+            initial_state=initial_skill_state,
+            initial_observation="",
         )
-        self._sync_usage(journal, state)
+        self._sync_usage(journal, state_obj)
 
         if outcome.marker in ("BLOCKED", "GAP"):
-            state.state = "blocked"
-            journal.set_task_state(state, note=f"{outcome.marker}: {outcome.text[-500:]}")
+            state_obj.state = "blocked"
+            state_obj.skill_state = outcome.final_state or {}
+            journal.set_task_state(state_obj, note=f"{outcome.marker}: {outcome.text[-500:]}")
             return
         if outcome.marker == "STEPS_EXHAUSTED":
-            state.state = "failed"
-            journal.set_task_state(state, note="исчерпаны шаги агента без маркера DONE")
+            state_obj.state = "failed"
+            state_obj.skill_state = outcome.final_state or {}
+            journal.set_task_state(state_obj, note="исчерпаны шаги агента без маркера DONE")
             return
 
         # Гейт №2: валидация + reviewer, затем repair-цикл (SPEC.md §FR-3).
@@ -145,67 +156,73 @@ class Runner:
             verdict, verdict_text = self._review(journal, task, toolbox, ok, validation_log)
             if ok and verdict == "APPROVE":
                 self._git_commit(task, toolbox)
-                state = journal.task_state(task.id)
-                state.state = "done"
-                state.repair_iterations = attempt
-                journal.set_task_state(state, note="acceptance зелёный, reviewer APPROVE")
+                state_obj = journal.task_state(task.id)
+                state_obj.state = "done"
+                state_obj.repair_iterations = attempt
+                if outcome.final_state is not None:
+                    state_obj.skill_state = outcome.final_state
+                journal.set_task_state(state_obj, note="acceptance зелёный, reviewer APPROVE")
                 return
             if verdict == "REJECT":
-                state = journal.task_state(task.id)
-                state.state = "failed"
-                state.repair_iterations = attempt
-                journal.set_task_state(state, note=f"reviewer REJECT: {verdict_text[-500:]}")
+                state_obj = journal.task_state(task.id)
+                state_obj.state = "failed"
+                state_obj.repair_iterations = attempt
+                if outcome.final_state is not None:
+                    state_obj.skill_state = outcome.final_state
+                journal.set_task_state(state_obj, note=f"reviewer REJECT: {verdict_text[-500:]}")
                 return
             if attempt >= max_repairs:
                 break
             # repair-итерация (состояния по SPEC.md §FR-4: repair = повторный running)
-            state = journal.task_state(task.id)
-            state.state = "running"
-            journal.set_task_state(state, note=f"repair iteration {attempt + 1}/{max_repairs}")
+            state_obj = journal.task_state(task.id)
+            state_obj.state = "running"
+            journal.set_task_state(state_obj, note=f"repair iteration {attempt + 1}/{max_repairs}")
             history.append(
                 f"## Repair iteration-{attempt + 1}\n"
                 f"Вердикт reviewer: {verdict_text}\nВывод валидации:\n{validation_log[-2000:]}"
             )
-            repair_prompt = self._task_prompt(package, task, spec_path, history="\n\n".join(history))
+            # Для repair используем тот же шаблон, но добавляем историю в конец
+            repair_template = prompt_template + "\n\n" + "\n".join(history)
             outcome = run_tool_agent(
                 self.client, self.cfg, journal,
                 role="repair",
                 system_prompt=self.system_prompt + "\n\n" + load_prompt(self.cfg.prompts_dir, "repair"),
-                user_prompt=repair_prompt,
+                user_prompt_template=repair_template,
                 toolbox=toolbox,
                 task_id=task.id,
                 phase="repair",
-                history_path=self._history_path(journal, task, "repair"),
+                initial_state=state_obj.skill_state,  # текущее состояние
+                initial_observation="",
             )
-            self._sync_usage(journal, journal.task_state(task.id))
+            self._sync_usage(journal, state_obj)
             if outcome.marker in ("STUCK", "DISPUTE"):
-                state = journal.task_state(task.id)
-                state.state = "failed" if outcome.marker == "STUCK" else "blocked"
-                state.repair_iterations = attempt + 1
-                journal.set_task_state(state, note=f"{outcome.marker}: {outcome.text[-500:]}")
+                state_obj = journal.task_state(task.id)
+                state_obj.state = "failed" if outcome.marker == "STUCK" else "blocked"
+                state_obj.repair_iterations = attempt + 1
+                state_obj.skill_state = outcome.final_state or {}
+                journal.set_task_state(state_obj, note=f"{outcome.marker}: {outcome.text[-500:]}")
                 return
             if not self._check_budgets(journal, task, journal.task_state(task.id)):
                 return
+            # После repair-цикла обновляем state_obj для следующей итерации
+            state_obj = journal.task_state(task.id)
 
-        state = journal.task_state(task.id)
-        state.state = "failed"
-        state.repair_iterations = max_repairs
+        state_obj = journal.task_state(task.id)
+        state_obj.state = "failed"
+        state_obj.repair_iterations = max_repairs
+        if outcome.final_state is not None:
+            state_obj.skill_state = outcome.final_state
         journal.set_task_state(
-            state,
+            state_obj,
             note=f"не починено за {max_repairs} repair-итераций; см. events.jsonl",
         )
 
     # --- фазы ------------------------------------------------------------------
 
-    @staticmethod
-    def _history_path(journal: Journal, task: Task, phase: str) -> Path:
-        """Снапшот диалога фазы (AF-08): переживает kill прогона, читается resume."""
-        return journal.run_dir / "tasks" / f"{task.id}.{phase}.history.json"
-
     def _validate(self, journal: Journal, task: Task) -> tuple[bool, str]:
-        state = journal.task_state(task.id)
-        state.state = "validating"
-        journal.set_task_state(state)
+        state_obj = journal.task_state(task.id)
+        state_obj.state = "validating"
+        journal.set_task_state(state_obj)
         logs: list[str] = []
         ok = True
         for command in task.acceptance:
@@ -220,9 +237,9 @@ class Runner:
     def _review(
         self, journal: Journal, task: Task, toolbox: ToolBox, acceptance_ok: bool, validation_log: str
     ) -> tuple[str, str]:
-        state = journal.task_state(task.id)
-        state.state = "review"
-        journal.set_task_state(state)
+        state_obj = journal.task_state(task.id)
+        state_obj.state = "review"
+        journal.set_task_state(state_obj)
         written = self._written_snapshot(toolbox)
         prompt = (
             f"Задача {task.id}: {task.title}\nСпека: {task.spec_ref}\n\n"
@@ -251,39 +268,39 @@ class Runner:
 
     # --- бюджеты -----------------------------------------------------------------
 
-    def _check_budgets(self, journal: Journal, task: Task, state: TaskState) -> bool:
+    def _check_budgets(self, journal: Journal, task: Task, state_obj: TaskState) -> bool:
         task_budget = task.budget
         max_tokens = task_budget.max_tokens or self.cfg.budgets.per_task_max_tokens
-        if state.tokens_in + state.tokens_out >= max_tokens:
-            state.state = "blocked"
-            journal.set_task_state(state, note=f"per-task кап токенов ({max_tokens}) исчерпан")
+        if state_obj.tokens_in + state_obj.tokens_out >= max_tokens:
+            state_obj.state = "blocked"
+            journal.set_task_state(state_obj, note=f"per-task кап токенов ({max_tokens}) исчерпан")
             return False
         max_cost = task_budget.max_cost_usd
-        if max_cost is not None and state.cost_usd >= max_cost:
-            state.state = "blocked"
-            journal.set_task_state(state, note=f"per-task кап стоимости (${max_cost}) исчерпан")
+        if max_cost is not None and state_obj.cost_usd >= max_cost:
+            state_obj.state = "blocked"
+            journal.set_task_state(state_obj, note=f"per-task кап стоимости (${max_cost}) исчерпан")
             return False
         if self._run_cost(journal) >= self.cfg.budgets.per_run_max_cost_usd:
-            state.state = "blocked"
+            state_obj.state = "blocked"
             journal.set_task_state(
-                state, note=f"per-run кап стоимости (${self.cfg.budgets.per_run_max_cost_usd}) исчерпан"
+                state_obj, note=f"per-run кап стоимости (${self.cfg.budgets.per_run_max_cost_usd}) исчерпан"
             )
             return False
         if self._day_cost() >= self.cfg.budgets.per_day_max_cost_usd:
-            state.state = "blocked"
+            state_obj.state = "blocked"
             journal.set_task_state(
-                state, note=f"per-day кап стоимости (${self.cfg.budgets.per_day_max_cost_usd}) исчерпан"
+                state_obj, note=f"per-day кап стоимости (${self.cfg.budgets.per_day_max_cost_usd}) исчерпан"
             )
             return False
         return True
 
-    def _sync_usage(self, journal: Journal, state: TaskState) -> None:
+    def _sync_usage(self, journal: Journal, state_obj: TaskState) -> None:
         """Пересчитать токены/стоимость задачи из журнала."""
-        events = journal.log_for_task(state.id)
-        state.tokens_in = sum(e.get("tokens_in", 0) for e in events)
-        state.tokens_out = sum(e.get("tokens_out", 0) for e in events)
-        state.cost_usd = round(sum(e.get("cost_usd", 0.0) for e in events), 6)
-        journal.set_task_state(state)
+        events = journal.log_for_task(state_obj.id)
+        state_obj.tokens_in = sum(e.get("tokens_in", 0) for e in events)
+        state_obj.tokens_out = sum(e.get("tokens_out", 0) for e in events)
+        state_obj.cost_usd = round(sum(e.get("cost_usd", 0.0) for e in events), 6)
+        journal.set_task_state(state_obj)
 
     @staticmethod
     def _run_cost(journal: Journal) -> float:
@@ -355,11 +372,11 @@ class Runner:
         """
         journal = Journal(self.cfg.runs_dir, run_id)
         journal.accept_task(task_id)
-        state = journal.task_state(task_id)
-        if state.state in ("blocked", "failed"):
-            state.state = "done"
+        state_obj = journal.task_state(task_id)
+        if state_obj.state in ("blocked", "failed"):
+            state_obj.state = "done"
             journal.set_task_state(
-                state, note=f"принято вручную владельцем (override; было: {state.note})"
+                state_obj, note=f"принято вручную владельцем (override; было: {state_obj.note})"
             )
         if self._is_git_repo():
             code, out = self._git("merge", "--no-ff", f"forge/{task_id}")
@@ -368,9 +385,8 @@ class Runner:
 
     # --- промпт задачи ------------------------------------------------------------
 
-    def _task_prompt(
-        self, package: TaskPackage, task: Task, spec_path: Path | None, history: str
-    ) -> str:
+    def _task_prompt(self, package: TaskPackage, task: Task, spec_path: Path | None) -> str:
+        """Возвращает шаблон промпта с плейсхолдерами {{state}} и {{observation}}."""
         spec_excerpt = "(не приложена)"
         if spec_path and spec_path.exists():
             spec_excerpt = spec_path.read_text(encoding="utf-8")[:EXCERPT_LIMIT]
@@ -380,6 +396,7 @@ class Runner:
             if canon_path.exists():
                 canon_excerpt = canon_path.read_text(encoding="utf-8")[:EXCERPT_LIMIT]
         template = load_prompt(self.cfg.prompts_dir, "task_template")
+        # Подставляем все статические поля; state и observation оставляем как плейсхолдеры
         return render(
             template,
             {
@@ -394,6 +411,8 @@ class Runner:
                 "и/или добавьте AGENTS.md в корень репозитория)",
                 "task.scope_paths": "\n".join(f"- `{p}`" for p in task.scope_paths),
                 "task.acceptance": "\n".join(f"- `{c}`" for c in task.acceptance),
-                "history": history,
+                # Плейсхолдеры для SKILL.state будут подставлены в run_tool_agent
+                "state": "{{state}}",
+                "observation": "{{observation}}",
             },
         )

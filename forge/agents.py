@@ -1,4 +1,4 @@
-"""Агентные циклы: coder/repair (модель ↔ инструменты) и reviewer (SPEC.md §FR-2/FR-3)."""
+"""Агентные циклы: coder/repair (модель ↔ инструменты) и reviewer (SPEC.md §FR-2/§FR-3)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 from .config import ForgeConfig
 from .journal import Journal
 from .llm import ChatResult, LLMClient
-from .tools import TOOL_SCHEMAS, ToolBox
+from .tools import TOOL_SCHEMAS, ToolBox, validate_state_patch, apply_state_patch
 
 #: Маркеры завершения агента (prompts/20, prompts/40).
 DONE_MARKERS = ("DONE",)
@@ -23,6 +23,7 @@ MAX_AGENT_STEPS = 40  # калибровка пилотом: 25 не хвата�
 class AgentOutcome:
     marker: str  # DONE / BLOCKED / GAP / STUCK / DISPUTE / STEPS_EXHAUSTED
     text: str    # последний текстовый ответ агента (сводка/причина)
+    final_state: dict[str, Any] | None = None   # финальное состояние SKILL
 
 
 def parse_marker(content: str) -> str | None:
@@ -60,20 +61,56 @@ def log_model_call(
     return cost
 
 
-def _save_history(history_path: Path, steps: int, messages: list[dict[str, Any]]) -> None:
-    """Снапшот диалога агента на диск (AF-08): resume после kill продолжает
-    фазу с контекстом, а не рестартует её с чистого диалога."""
-    history_path.write_text(
-        json.dumps({"steps": steps, "messages": messages}, ensure_ascii=False),
-        encoding="utf-8",
-    )
+def _parse_skill_response(content: str) -> tuple[dict[str, Any], str, str | None]:
+    """Извлекает JSON из ответа модели (SKILL.state протокол).
 
+    Возвращает (state_patch, action, marker). Маркер может быть полем в JSON
+    или стоять после JSON.
+    """
+    import re
 
-def _drop_history(history_path: Path | None) -> None:
-    """Фаза завершилась штатно (любой маркер, включая STEPS_EXHAUSTED) —
-    снапшот не нужен: повторный запуск задачи начнётся с чистого диалога."""
-    if history_path is not None:
-        history_path.unlink(missing_ok=True)
+    # 1) Ищем блок ```json ... ```
+    json_match = re.search(r'```json\s*([\s\S]*?)\s*```', content)
+    if json_match:
+        json_str = json_match.group(1)
+        rest = content[json_match.end():].strip()
+    else:
+        # 2) Ищем первый '{' и пытаемся найти сбалансированный JSON
+        start = content.find('{')
+        if start == -1:
+            raise ValueError("No JSON object found in response")
+        stack = 0
+        end = None
+        for i, ch in enumerate(content[start:], start):
+            if ch == '{':
+                stack += 1
+            elif ch == '}':
+                stack -= 1
+                if stack == 0:
+                    end = i + 1
+                    break
+        if end is None:
+            raise ValueError("Unbalanced JSON in response")
+        json_str = content[start:end]
+        rest = content[end:].strip()
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")
+
+    state_patch = data.get("state_patch", {})
+    action = data.get("action", "")
+    marker = data.get("marker")  # может быть внутри JSON
+
+    if marker is None and rest:
+        # Ищем маркер в остатке (первое слово)
+        for m in STOP_MARKERS:
+            if rest.startswith(m) or rest.startswith(m + ":"):
+                marker = m
+                break
+
+    return state_patch, action, marker
 
 
 def run_tool_agent(
@@ -83,89 +120,87 @@ def run_tool_agent(
     *,
     role: str,
     system_prompt: str,
-    user_prompt: str,
+    user_prompt_template: str,          # шаблон с {{state}} и {{observation}}
     toolbox: ToolBox,
     task_id: str,
     phase: str,
     max_steps: int = MAX_AGENT_STEPS,
-    history_path: Path | None = None,
+    initial_state: dict[str, Any] | None = None,
+    initial_observation: str = "",
 ) -> AgentOutcome:
-    """Цикл «модель ↔ инструменты» до маркера завершения или исчерпания шагов."""
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    start_step = 0
-    if history_path is not None and history_path.exists():
-        saved = json.loads(history_path.read_text(encoding="utf-8"))
-        messages = saved["messages"]
-        start_step = int(saved.get("steps", 0))
-        journal.event(
-            task_id=task_id, phase=phase, role=role,
-            note=f"восстановлен диалог из снапшота: {start_step} шагов, {len(messages)} сообщений",
-        )
-    last_text = ""
-    for step in range(start_step, max_steps):
-        result = client.chat(role, messages, tools=TOOL_SCHEMAS)
-        log_model_call(journal, cfg, task_id, phase, role, result)
-        journal.event(
-            task_id=task_id, phase=phase, role=role,
-            note=f"raw reply: {(result.content or '<tool_calls>')[:2000]}",
-        )
+    """Цикл «модель → действие → наблюдение» по протоколу SKILL.state.
 
-        if result.tool_calls:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": result.content or None,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments, ensure_ascii=False),
-                            },
-                        }
-                        for tc in result.tool_calls
-                    ],
-                }
+    История не накапливается: на каждом шаге передаётся только system и новый
+    user_prompt, сформированный из шаблона с текущими state и observation.
+    """
+    state = initial_state or {}
+    observation = initial_observation
+    last_text = ""
+
+    for step in range(max_steps):
+        # Собрать промпт с подстановкой текущего состояния и наблюдения
+        user_prompt = user_prompt_template.replace("{{state}}", json.dumps(state, ensure_ascii=False))
+        user_prompt = user_prompt.replace("{{observation}}", observation)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        # Вызов модели БЕЗ инструментов (вся логика действия в JSON)
+        result = client.chat(role, messages, tools=None)
+        log_model_call(journal, cfg, task_id, phase, role, result)
+
+        # Парсим ответ
+        try:
+            state_patch, action, marker = _parse_skill_response(result.content)
+        except ValueError as e:
+            journal.event(
+                task_id=task_id, phase=phase, role=role,
+                note=f"Ошибка парсинга JSON: {e}\nОтвет: {result.content[:500]}"
             )
-            for tc in result.tool_calls:
-                output = toolbox.call(tc.name, tc.arguments)
-                is_scope_error = output.startswith("ERROR:") and (
-                    "вне scope" in output or "canon/" in output
-                )
-                journal.event(
-                    task_id=task_id,
-                    phase=phase,
-                    role=role,
-                    command=f"{tc.name} {json.dumps(tc.arguments, ensure_ascii=False)[:300]}",
-                    note=("SCOPE_VIOLATION: " if is_scope_error else "") + output[:1000],
-                )
-                messages.append({"role": "tool", "tool_call_id": tc.id, "content": output})
-            if history_path is not None:
-                _save_history(history_path, step + 1, messages)
-            continue
+            # Продолжаем, но с пустым патчем и без действия (или можно прерваться?)
+            state_patch, action, marker = {}, "", None
+
+        # Валидация патча
+        if not validate_state_patch(state_patch):
+            journal.event(
+                task_id=task_id, phase=phase, role=role,
+                note=f"Невалидный патч состояния: {state_patch}"
+            )
+            state_patch = {}
+
+        # Применяем патч
+        new_state = apply_state_patch(state, state_patch)
+        state = new_state
+
+        # Выполняем действие
+        output = ""
+        if action:
+            try:
+                output = toolbox.execute(action, state)
+            except Exception as exc:
+                output = f"ERROR: {exc}"
+            journal.event(
+                task_id=task_id, phase=phase, role=role,
+                command=action, note=output[:1000]
+            )
+            observation = output
+        else:
+            observation = ""
 
         last_text = result.content
-        marker = parse_marker(result.content)
+
+        # Проверяем маркер завершения
         if marker:
-            _drop_history(history_path)
-            return AgentOutcome(marker=marker, text=result.content)
-        # Нет ни инструментов, ни маркера — просим завершить по протоколу.
-        messages.append({"role": "assistant", "content": result.content})
-        messages.append(
-            {
-                "role": "user",
-                "content": "Заверши работу маркером: DONE / BLOCKED: <причина> / GAP: <чего не хватает>"
-                + (" / STUCK / DISPUTE" if role == "repair" else ""),
-            }
-        )
-        if history_path is not None:
-            _save_history(history_path, step + 1, messages)
-    _drop_history(history_path)
-    return AgentOutcome(marker="STEPS_EXHAUSTED", text=last_text)
+            return AgentOutcome(marker=marker, text=result.content, final_state=state)
+
+        # Если маркер не указан явно, пробуем извлечь из текста (старый формат)
+        if parse_marker(result.content):
+            return AgentOutcome(marker=parse_marker(result.content), text=result.content, final_state=state)
+
+    # Шаги исчерпаны
+    return AgentOutcome(marker="STEPS_EXHAUSTED", text=last_text, final_state=state)
 
 
 def run_reviewer(

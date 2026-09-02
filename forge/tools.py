@@ -91,7 +91,6 @@ DENY_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 
 #: Дефолты окружения Windows для дочерних процессов (выявлено при приёмке
 #: проектов на dotnet: без ProgramFiles NuGet падает с «Value cannot be null (Parameter 'path1')»).
-#: без ProgramFiles NuGet падает с «Value cannot be null (Parameter 'path1')»).
 _WINDOWS_ENV_DEFAULTS = {
     "ProgramFiles": r"C:\Program Files",
     "ProgramFiles(x86)": r"C:\Program Files (x86)",
@@ -242,3 +241,64 @@ class ToolBox:
         if len(output) > MAX_OUTPUT:
             output = output[:MAX_OUTPUT] + "\n... [truncated]"
         return f"exit_code={proc.returncode}\n{output}"
+
+    # --- SKILL.state: выполнение действия по строке ---------------------------
+
+    def execute(self, action: str, state: dict[str, Any]) -> str:
+        """Выполнить действие, переданное моделью в поле action.
+
+        Поддерживаются форматы:
+          - "read_file: путь"              -> читает файл и возвращает содержимое
+          - "write_file: путь"             -> записывает файл, содержимое берётся из state['write_content']
+          - "list_dir: путь"               -> список каталога
+          - "run_command: команда"         -> выполняет shell-команду
+          - "команда" (без префикса)       -> shell-команда (run_command)
+
+        Для write_file содержимое должно быть передано в состоянии под ключом "write_content".
+        Если ключ отсутствует, возвращается ошибка.
+        """
+        if not action or action.strip().lower() == "done":
+            return ""
+
+        # Разбираем префикс
+        parts = action.split(":", 1)
+        if len(parts) == 2:
+            cmd = parts[0].strip().lower()
+            arg = parts[1].strip()
+            if cmd == "read_file":
+                return self.read_file(arg)
+            elif cmd == "write_file":
+                content = state.get("write_content")
+                if content is None:
+                    return "ERROR: write_file requires 'write_content' key in state"
+                return self.write_file(arg, content)
+            elif cmd == "list_dir":
+                return self.list_dir(arg)
+            elif cmd == "run_command":
+                return self.run_command(arg)
+            else:
+                # Неизвестный префикс — пробуем как команду
+                return self.run_command(action)
+        else:
+            # Нет префикса — считаем shell-командой
+            return self.run_command(action)
+
+
+# ----------------------------------------------------------------------
+# SKILL.state: вспомогательные функции для работы с патчами состояния
+# ----------------------------------------------------------------------
+
+def validate_state_patch(patch: dict, schema: dict | None = None) -> bool:
+    """Базовая проверка, что patch — словарь (пока без глубокой валидации)."""
+    return isinstance(patch, dict)
+
+
+def apply_state_patch(state: dict, patch: dict) -> dict:
+    """Применяет патч: копирует состояние, для каждого ключа, если значение None — удаляет ключ, иначе обновляет."""
+    new_state = dict(state)
+    for key, value in patch.items():
+        if value is None:
+            new_state.pop(key, None)
+        else:
+            new_state[key] = value
+    return new_state
